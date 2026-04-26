@@ -225,6 +225,19 @@ func contains(haystack []string, needle string) bool {
 
 func makeHealthHandler(r *sessionRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotImplemented)
+		body := struct {
+			Status         string `json:"status"`
+			Transport      string `json:"transport"`
+			ActiveSessions int    `json:"activeSessions"`
+			Version        string `json:"version"`
+		}{
+			Status:         "ok",
+			Transport:      "streamable-http",
+			ActiveSessions: r.count(),
+			Version:        version,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(body)
 	}
 }
