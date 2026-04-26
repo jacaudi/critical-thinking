@@ -2,6 +2,7 @@ package thinking
 
 import (
 	"encoding/json"
+	"math"
 	"sort"
 	"strconv"
 	"testing"
@@ -189,5 +190,68 @@ func TestProcessThoughtBranchFromOutOfRange(t *testing.T) {
 	}
 	if !res.IsError {
 		t.Error("expected IsError for out-of-range branchFromThought")
+	}
+}
+
+func almostEqual(a, b float64) bool {
+	return math.Abs(a-b) < 1e-9
+}
+
+func TestSessionConfidenceTrunkOnly(t *testing.T) {
+	s := NewServer()
+	confs := []float64{0.5, 0.7, 0.9}
+	for i, c := range confs {
+		td := validInput(i + 1)
+		td.Confidence = c
+		if _, err := s.ProcessThought(td); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := (0.5 + 0.7 + 0.9) / 3.0
+	if got := s.SessionConfidence(); !almostEqual(got, want) {
+		t.Errorf("SessionConfidence = %v, want %v", got, want)
+	}
+}
+
+func TestPerBranchConfidence(t *testing.T) {
+	s := NewServer()
+
+	// Trunk thought 1, conf 0.6.
+	td1 := validInput(1)
+	td1.Confidence = 0.6
+	if _, err := s.ProcessThought(td1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Branch-a thought, conf 0.4.
+	td2 := validInput(2)
+	td2.BranchFromThought = intPtr(1)
+	td2.BranchID = "branch-a"
+	td2.Confidence = 0.4
+	if _, err := s.ProcessThought(td2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Branch-a another thought, conf 0.2.
+	td3 := validInput(3)
+	td3.BranchFromThought = intPtr(1)
+	td3.BranchID = "branch-a"
+	td3.Confidence = 0.2
+	res, err := s.ProcessThought(td3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var resp ThoughtResponse
+	_ = json.Unmarshal([]byte(res.StructuredJSON), &resp)
+
+	// Trunk should still be 0.6 (only 1 trunk thought).
+	if !almostEqual(resp.SessionConfidence, 0.6) {
+		t.Errorf("SessionConfidence = %v, want 0.6", resp.SessionConfidence)
+	}
+	// Branch-a should be (0.4 + 0.2) / 2 = 0.3.
+	got := resp.BranchConfidences["branch-a"]
+	if !almostEqual(got, 0.3) {
+		t.Errorf("branch-a confidence = %v, want 0.3", got)
 	}
 }

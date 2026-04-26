@@ -107,9 +107,27 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 		s.branches[td.BranchID] = append(s.branches[td.BranchID], td)
 	}
 
-	// Trunk-only confidence aggregation in this task; per-branch added in Task 8.
-	s.confidenceSum += td.Confidence
-	s.confidenceN++
+	onBranch := td.BranchFromThought != nil && td.BranchID != ""
+	if onBranch {
+		s.branchConfSum[td.BranchID] += td.Confidence
+		s.branchConfN[td.BranchID]++
+	} else {
+		s.confidenceSum += td.Confidence
+		s.confidenceN++
+	}
+
+	var branchConf map[string]float64
+	if len(s.branchConfN) > 0 {
+		branchConf = make(map[string]float64, len(s.branchConfN))
+		for k, n := range s.branchConfN {
+			branchConf[k] = s.branchConfSum[k] / float64(n)
+		}
+	}
+
+	sessionConf := 0.0
+	if s.confidenceN > 0 {
+		sessionConf = s.confidenceSum / float64(s.confidenceN)
+	}
 
 	resp := ThoughtResponse{
 		ThoughtNumber:        td.ThoughtNumber,
@@ -117,7 +135,8 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 		NextThoughtNeeded:    *td.NextThoughtNeeded,
 		Branches:             sortedKeys(s.branches),
 		ThoughtHistoryLength: len(s.thoughtHistory),
-		SessionConfidence:    s.confidenceSum / float64(s.confidenceN),
+		SessionConfidence:    sessionConf,
+		BranchConfidences:    branchConf,
 	}
 
 	structured, err := json.Marshal(resp)
