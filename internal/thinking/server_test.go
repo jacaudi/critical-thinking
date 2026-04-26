@@ -341,3 +341,70 @@ func TestProcessThoughtConcurrent(t *testing.T) {
 		t.Errorf("HistoryLength = %d, want %d", got, goroutines*perGoroutine)
 	}
 }
+
+func TestRevisionHeader(t *testing.T) {
+	s := NewServer()
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	td := validInput(2)
+	td.IsRevision = boolPtr(true)
+	td.RevisesThought = intPtr(1)
+	res, _ := s.ProcessThought(td)
+	if !strings.Contains(res.Text, "Revision of thought 1 (now thought 2)") {
+		t.Errorf("revision header missing; got:\n%s", res.Text)
+	}
+}
+
+func TestBranchFirstHeader(t *testing.T) {
+	s := NewServer()
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	td := validInput(2)
+	td.BranchFromThought = intPtr(1)
+	td.BranchID = "monolith-first"
+	res, _ := s.ProcessThought(td)
+	if !strings.Contains(res.Text, "Branch 'monolith-first' from thought 1") {
+		t.Errorf("branch-first header missing; got:\n%s", res.Text)
+	}
+}
+
+func TestBranchSubsequentHeader(t *testing.T) {
+	s := NewServer()
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	td2 := validInput(2)
+	td2.BranchFromThought = intPtr(1)
+	td2.BranchID = "monolith-first"
+	if _, err := s.ProcessThought(td2); err != nil {
+		t.Fatal(err)
+	}
+	td3 := validInput(3)
+	td3.BranchFromThought = intPtr(1)
+	td3.BranchID = "monolith-first"
+	res, _ := s.ProcessThought(td3)
+	if !strings.Contains(res.Text, "Branch 'monolith-first' · thought 3") {
+		t.Errorf("branch-subsequent header missing; got:\n%s", res.Text)
+	}
+}
+
+func TestBranchDualFooter(t *testing.T) {
+	s := NewServer()
+	// Trunk seed
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	td := validInput(2)
+	td.BranchFromThought = intPtr(1)
+	td.BranchID = "alt"
+	td.Confidence = 0.4
+	res, _ := s.ProcessThought(td)
+	if !strings.Contains(res.Text, "branch 'alt' confidence 0.40") {
+		t.Errorf("branch confidence footer missing; got:\n%s", res.Text)
+	}
+	if !strings.Contains(res.Text, "session confidence (trunk)") {
+		t.Errorf("trunk session footer missing; got:\n%s", res.Text)
+	}
+}
