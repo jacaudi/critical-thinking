@@ -1,14 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/jacaudi/rubber-ducky-mcp/internal/thinking"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestCORSDefaultRejectsBrowser(t *testing.T) {
@@ -135,5 +141,170 @@ func TestPruneIdleRemovesStaleSessions(t *testing.T) {
 
 	if got := r.count(); got != 1 {
 		t.Errorf("count = %d, want 1 (only fresh should remain)", got)
+	}
+}
+
+// httpClient does the minimal MCP plumbing: initialize, capture session id,
+// then POST tools/call requests. We intentionally stay below the SDK to keep
+// the test as a black-box integration check.
+type httpClient struct {
+	base      string
+	sessionID string
+	id        int
+}
+
+func newHTTPClient(t *testing.T, base string) *httpClient {
+	t.Helper()
+	c := &httpClient{base: base}
+	c.id++
+	resp, body := c.post(t, `{"jsonrpc":"2.0","id":`+strconv.Itoa(c.id)+`,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}`, false)
+	c.sessionID = resp.Header.Get("mcp-session-id")
+	if c.sessionID == "" {
+		t.Fatalf("no mcp-session-id in initialize response: %s", body)
+	}
+	// Send the initialized notification so the server treats us as a live client.
+	c.post(t, `{"jsonrpc":"2.0","method":"notifications/initialized"}`, true)
+	return c
+}
+
+func (c *httpClient) callTool(t *testing.T, args thinking.ThoughtData) thinking.ThoughtResponse {
+	t.Helper()
+	c.id++
+	bodyJSON, _ := json.Marshal(args)
+	payload := `{"jsonrpc":"2.0","id":` + strconv.Itoa(c.id) +
+		`,"method":"tools/call","params":{"name":"criticalthinking","arguments":` + string(bodyJSON) + `}}`
+	_, body := c.post(t, payload, true)
+
+	// The MCP SDK can return the result either as a JSON body OR as a single
+	// SSE event with `data: {...}`. Handle both by extracting the first
+	// JSON-RPC envelope from the body.
+	jsonText := extractFirstJSON(body)
+
+	var rpc struct {
+		Result struct {
+			StructuredContent thinking.ThoughtResponse `json:"structuredContent"`
+			IsError           bool                     `json:"isError"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(jsonText), &rpc); err != nil {
+		t.Fatalf("unmarshal tool response: %v\nbody=%s\nextracted=%s", err, body, jsonText)
+	}
+	if rpc.Result.IsError {
+		t.Fatalf("tool returned isError=true: %s", body)
+	}
+	return rpc.Result.StructuredContent
+}
+
+func (c *httpClient) post(t *testing.T, payload string, withSession bool) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, c.base+"/mcp", bytes.NewBufferString(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	if withSession && c.sessionID != "" {
+		req.Header.Set("mcp-session-id", c.sessionID)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+// extractFirstJSON returns the first JSON-RPC envelope from a server response,
+// handling both plain JSON bodies and Server-Sent Event framings.
+func extractFirstJSON(body string) string {
+	// Plain JSON body: starts with {.
+	trimmed := strings.TrimSpace(body)
+	if strings.HasPrefix(trimmed, "{") {
+		return trimmed
+	}
+	// SSE framing: "data: {...}\n". Find the first "data: " line and return
+	// everything after the prefix up to the next newline (or end of string).
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if strings.HasPrefix(line, "data: ") {
+			return strings.TrimPrefix(line, "data: ")
+		}
+	}
+	return body
+}
+
+// validInputN is the integration-test analog of the package's validInput;
+// defined here to avoid importing test-only helpers across packages.
+func validInputN(num int, sessionTag string) thinking.ThoughtData {
+	yes := true
+	return thinking.ThoughtData{
+		Thought:           sessionTag + " thought " + strconv.Itoa(num),
+		ThoughtNumber:     num,
+		TotalThoughts:     20,
+		NextThoughtNeeded: &yes,
+		Confidence:        0.5,
+		Assumptions:       []string{},
+		Critique:          "narrow",
+		CounterArgument:   "alternative",
+		NextStepRationale: "next",
+	}
+}
+
+func TestCrossSessionIsolation(t *testing.T) {
+	// Build the same handler chain main() uses.
+	registry := newSessionRegistry()
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
+		state := thinking.NewServer()
+		registry.add(state)
+		return newMCPServer(state)
+	}, nil)
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcpHandler)
+	mux.HandleFunc("/health", makeHealthHandler(registry))
+
+	ts := httptest.NewServer(withCORS(mux))
+	defer ts.Close()
+
+	clientA := newHTTPClient(t, ts.URL)
+	clientB := newHTTPClient(t, ts.URL)
+
+	if clientA.sessionID == clientB.sessionID {
+		t.Fatal("two clients got the same session id")
+	}
+
+	// Drive 10 thoughts through each, interleaved.
+	const N = 10
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 1; i <= N; i++ {
+			clientA.callTool(t, validInputN(i, "A"))
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 1; i <= N; i++ {
+			clientB.callTool(t, validInputN(i, "B"))
+		}
+	}()
+	wg.Wait()
+
+	// Final call on each session: assert each only sees its own thoughts.
+	respA := clientA.callTool(t, validInputN(N+1, "A"))
+	respB := clientB.callTool(t, validInputN(N+1, "B"))
+
+	if respA.ThoughtHistoryLength != N+1 {
+		t.Errorf("session A history length = %d, want %d", respA.ThoughtHistoryLength, N+1)
+	}
+	if respB.ThoughtHistoryLength != N+1 {
+		t.Errorf("session B history length = %d, want %d", respB.ThoughtHistoryLength, N+1)
+	}
+
+	// Registry should see both sessions live.
+	if got := registry.count(); got < 2 {
+		t.Errorf("registry count = %d, want >= 2", got)
 	}
 }
