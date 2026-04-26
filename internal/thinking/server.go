@@ -1,6 +1,8 @@
 package thinking
 
 import (
+	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -59,4 +61,82 @@ func (s *SequentialThinkingServer) LastAccessed() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.lastAccessed
+}
+
+// ToolResult is the package-internal return type from ProcessThought. main.go
+// adapts it into a *mcp.CallToolResult — keeping mcp imports out of this
+// package preserves its testability.
+type ToolResult struct {
+	Text           string // the rubber-duck transcript (or error JSON when IsError)
+	StructuredJSON string // JSON-encoded ThoughtResponse, "" when IsError
+	IsError        bool
+}
+
+// ProcessThought validates input, mutates state, and returns either a
+// transcript+structured response or an error result. The Go-level error
+// return is reserved for unrecoverable internal faults (currently never
+// returned); validation failures produce IsError=true results.
+func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, error) {
+	if err := td.Validate(); err != nil {
+		return errorResult(err), nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Cross-field validation against state.
+	if td.RevisesThought != nil && *td.RevisesThought > len(s.thoughtHistory) {
+		return errorResult(fmt.Errorf("revisesThought %d out of range (history length %d)",
+			*td.RevisesThought, len(s.thoughtHistory))), nil
+	}
+	if td.BranchFromThought != nil && *td.BranchFromThought > len(s.thoughtHistory) {
+		return errorResult(fmt.Errorf("branchFromThought %d out of range (history length %d)",
+			*td.BranchFromThought, len(s.thoughtHistory))), nil
+	}
+
+	if td.ThoughtNumber > td.TotalThoughts {
+		td.TotalThoughts = td.ThoughtNumber
+	}
+
+	s.thoughtHistory = append(s.thoughtHistory, td)
+	s.lastAccessed = time.Now()
+
+	// Trunk-only confidence aggregation in this task; per-branch added in Task 8.
+	s.confidenceSum += td.Confidence
+	s.confidenceN++
+
+	resp := ThoughtResponse{
+		ThoughtNumber:        td.ThoughtNumber,
+		TotalThoughts:        td.TotalThoughts,
+		NextThoughtNeeded:    *td.NextThoughtNeeded,
+		Branches:             []string{}, // populated in Task 7
+		ThoughtHistoryLength: len(s.thoughtHistory),
+		SessionConfidence:    s.confidenceSum / float64(s.confidenceN),
+	}
+
+	structured, err := json.Marshal(resp)
+	if err != nil {
+		// Should be impossible for fixed-shape struct.
+		return errorResult(fmt.Errorf("marshal response: %w", err)), nil
+	}
+
+	return ToolResult{
+		Text:           "Thought " + itoaInt(td.ThoughtNumber) + " of " + itoaInt(td.TotalThoughts), // expanded in Task 9
+		StructuredJSON: string(structured),
+		IsError:        false,
+	}, nil
+}
+
+// errorResult formats a validation/runtime error in the JS-compatible
+// {error, status: "failed"} shape.
+func errorResult(err error) ToolResult {
+	body, _ := json.Marshal(struct {
+		Error  string `json:"error"`
+		Status string `json:"status"`
+	}{Error: err.Error(), Status: "failed"})
+	return ToolResult{Text: string(body), IsError: true}
+}
+
+func itoaInt(i int) string {
+	return fmt.Sprintf("%d", i)
 }
