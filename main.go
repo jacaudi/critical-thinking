@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -163,8 +164,64 @@ func (r *sessionRegistry) count() int {
 	return len(r.states)
 }
 
-// withCORS and makeHealthHandler are stubs filled in by Tasks 14 and 15.
-func withCORS(h http.Handler) http.Handler { return h }
+// withCORS gates browser access via the ALLOWED_ORIGINS env var (comma-
+// separated list). Default is empty — no browser origins allowed.
+//
+// When an origin matches:
+//   - Access-Control-Allow-Origin: <origin>
+//   - Access-Control-Allow-Credentials: true
+//   - Access-Control-Expose-Headers: mcp-session-id  (so JS clients can read it)
+//   - Vary: Origin                                   (cache-poisoning mitigation)
+//
+// Non-browser callers (no Origin header) bypass the check entirely.
+func withCORS(h http.Handler) http.Handler {
+	allowed := parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS"))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			if !contains(allowed, origin) {
+				http.Error(w, "Origin not allowed", http.StatusForbidden)
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Expose-Headers", "mcp-session-id")
+			w.Header().Add("Vary", "Origin")
+		}
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, mcp-session-id")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+func parseAllowedOrigins(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if h == needle {
+			return true
+		}
+	}
+	return false
+}
 
 func makeHealthHandler(r *sessionRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
