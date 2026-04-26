@@ -25,9 +25,8 @@ var version = "dev"
 var httpAddr = flag.String("http", "", "if set (e.g., \":3000\"), serve Streamable HTTP at this address; otherwise use stdio")
 
 const (
-	idleTimeout     = 60 * time.Minute
-	cleanupInterval = 5 * time.Minute
-	shutdownGrace   = 10 * time.Second
+	idleTimeout   = 60 * time.Minute
+	shutdownGrace = 10 * time.Second
 )
 
 func main() {
@@ -58,22 +57,40 @@ func runStdio() {
 // factory closure. There is no map keyed by session-id anywhere in this
 // process — the closure scope is the cross-session isolation invariant.
 //
-// We do, however, keep a small in-process registry of *active* per-session
-// states so the idle-cleanup goroutine (Task 16) can iterate them. The
-// registry stores only the state pointers; cross-session access is impossible
-// because the tool handler captures one state and never reads from the
-// registry.
+// Idle-session lifecycle is delegated to the SDK via
+// StreamableHTTPOptions.SessionTimeout: the SDK closes its own per-session
+// state after idleTimeout of inactivity, releasing the bound *mcp.Server (and
+// the *SequentialThinkingServer it captures) for GC.
+//
+// We keep a small in-process registry that counts every session ever created.
+// The registry is NOT synchronized with the SDK's view of live sessions — once
+// the SDK closes a session we have no callback, so the count drifts upward.
+// /health exposes it as `sessionsCreated` to make the semantics explicit.
 func runHTTP(addr string) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	registry := newSessionRegistry()
 
+	// Wire ALLOWED_ORIGINS into the SDK's CSRF protection so browser clients
+	// from those origins aren't rejected by the SDK's default same-origin
+	// policy. Non-browser callers (no Origin / no Sec-Fetch-Site) are still
+	// allowed regardless.
+	csrf := http.NewCrossOriginProtection()
+	for _, o := range parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS")) {
+		if err := csrf.AddTrustedOrigin(o); err != nil {
+			log.Fatalf("invalid ALLOWED_ORIGINS entry %q: %v", o, err)
+		}
+	}
+
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		state := thinking.NewServer()
 		registry.add(state)
 		return newMCPServer(state)
-	}, nil)
+	}, &mcp.StreamableHTTPOptions{
+		SessionTimeout:        idleTimeout,
+		CrossOriginProtection: csrf,
+	})
 
 	host := "127.0.0.1"
 	if os.Getenv("DOCKER") == "true" {
@@ -92,8 +109,6 @@ func runHTTP(addr string) {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	go runIdleCleanup(ctx, registry)
-
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
@@ -106,24 +121,6 @@ func runHTTP(addr string) {
 	log.Printf("rubber-ducky-thinking %s listening on http://%s", version, listenAddr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("listen: %v", err)
-	}
-}
-
-// runIdleCleanup ticks every cleanupInterval and prunes sessions whose
-// LastAccessed is older than idleTimeout. The registry's `states` slice is
-// rebuilt without timed-out entries; the SequentialThinkingServer instances
-// themselves become unreachable and get garbage-collected (the tool handler
-// for that session also goes out of scope when the SDK closes the transport).
-func runIdleCleanup(ctx context.Context, r *sessionRegistry) {
-	t := time.NewTicker(cleanupInterval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			r.pruneIdle(idleTimeout)
-		}
 	}
 }
 
@@ -211,10 +208,11 @@ func makeResourceHandler(state *thinking.SequentialThinkingServer) func(context.
 	}
 }
 
-// sessionRegistry tracks active per-session states for idle cleanup. It does
+// sessionRegistry counts every session ever created in this process. It does
 // NOT mediate access to states — only the factory closure that created a state
-// holds the reference used by the tool handler. The registry is read-only
-// from the tool path's perspective.
+// holds the reference used by the tool handler — and it is NOT pruned when the
+// SDK closes idle sessions (we have no callback). Treat the count as a
+// lifetime "sessions created" counter, not an "active right now" gauge.
 type sessionRegistry struct {
 	mu     sync.Mutex
 	states []*thinking.SequentialThinkingServer
@@ -232,19 +230,6 @@ func (r *sessionRegistry) count() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.states)
-}
-
-func (r *sessionRegistry) pruneIdle(maxIdle time.Duration) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cutoff := time.Now().Add(-maxIdle)
-	out := r.states[:0]
-	for _, s := range r.states {
-		if s.LastAccessed().After(cutoff) {
-			out = append(out, s)
-		}
-	}
-	r.states = out
 }
 
 // withCORS gates browser access via the ALLOWED_ORIGINS env var (comma-
@@ -272,7 +257,7 @@ func withCORS(h http.Handler) http.Handler {
 			w.Header().Add("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, mcp-session-id")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, MCP-Protocol-Version")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
@@ -309,15 +294,15 @@ func contains(haystack []string, needle string) bool {
 func makeHealthHandler(r *sessionRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		body := struct {
-			Status         string `json:"status"`
-			Transport      string `json:"transport"`
-			ActiveSessions int    `json:"activeSessions"`
-			Version        string `json:"version"`
+			Status          string `json:"status"`
+			Transport       string `json:"transport"`
+			SessionsCreated int    `json:"sessionsCreated"`
+			Version         string `json:"version"`
 		}{
-			Status:         "ok",
-			Transport:      "streamable-http",
-			ActiveSessions: r.count(),
-			Version:        version,
+			Status:          "ok",
+			Transport:       "streamable-http",
+			SessionsCreated: r.count(),
+			Version:         version,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

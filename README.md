@@ -44,17 +44,17 @@ rubber-ducky-thinking -http :3000
 Endpoints:
 
 - `POST/GET/DELETE /mcp` — main MCP endpoint.
-- `GET /health` — `{status, transport, activeSessions, version}`.
+- `GET /health` — `{status, transport, sessionsCreated, version}`. `sessionsCreated` is a lifetime counter of sessions ever created in this process; it is NOT pruned when the SDK closes idle sessions.
 
 ## Configuration
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `ALLOWED_ORIGINS` | (empty) | Comma-separated list of browser origins permitted to call `/mcp`. Default rejects all browser origins. Non-browser callers (no `Origin` header) are unaffected. |
+| `ALLOWED_ORIGINS` | (empty) | Comma-separated list of browser origins permitted to call `/mcp`. Wired into both the outer CORS layer and the SDK's CSRF protection (`http.CrossOriginProtection.AddTrustedOrigin`). Default rejects all browser origins. Non-browser callers (no `Origin` / no `Sec-Fetch-Site` header) are unaffected. |
 | `DOCKER` | unset | When `true`, HTTP server binds to `0.0.0.0` instead of `127.0.0.1`. Set automatically in the published Docker image. |
 | `DISABLE_THOUGHT_LOGGING` | unset | Reserved for the future structured-log gate. The current server emits no per-thought logs by default. |
 
-Sessions are in-memory only; idle sessions expire after 1 hour.
+Sessions are in-memory only; idle sessions expire after 1 hour (enforced by the SDK via `StreamableHTTPOptions.SessionTimeout`).
 
 ## Migrating from `http-sequential-thinking`
 
@@ -63,6 +63,7 @@ This is the Go successor to `jacaudi/http-sequential-thinking`. Breaking changes
 - **Tool renamed:** `sequentialthinking` → `criticalthinking`. Update `mcp.json` references.
 - **Required new fields:** every call must send `confidence`, `assumptions`, `critique`, `counterArgument`. Calls missing these fail with `IsError: true`.
 - **`nextStepRationale` required when `nextThoughtNeeded: true`.**
+- **Binary renamed:** `http-sequential-thinking` → `rubber-ducky-thinking`. Update `mcp.json` `command` fields and any shell-script references.
 - **Server name renamed:** `sequential-thinking-server` → `rubber-ducky-thinking`.
 - **Web UI removed.** Use MCP Inspector or `curl` for manual testing.
 - **CORS default tightened.** Set `ALLOWED_ORIGINS` explicitly to allow browser clients.

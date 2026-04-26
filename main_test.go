@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/jacaudi/rubber-ducky-mcp/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -92,10 +91,10 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 
 	var body struct {
-		Status         string `json:"status"`
-		Transport      string `json:"transport"`
-		ActiveSessions int    `json:"activeSessions"`
-		Version        string `json:"version"`
+		Status          string `json:"status"`
+		Transport       string `json:"transport"`
+		SessionsCreated int    `json:"sessionsCreated"`
+		Version         string `json:"version"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -106,41 +105,12 @@ func TestHealthEndpoint(t *testing.T) {
 	if body.Transport != "streamable-http" {
 		t.Errorf("transport = %q, want streamable-http", body.Transport)
 	}
-	if body.ActiveSessions != 2 {
-		t.Errorf("activeSessions = %d, want 2", body.ActiveSessions)
+	if body.SessionsCreated != 2 {
+		t.Errorf("sessionsCreated = %d, want 2", body.SessionsCreated)
 	}
 	// version may be "dev" or whatever -ldflags set; just confirm non-empty.
 	if body.Version == "" {
 		t.Errorf("version is empty")
-	}
-}
-
-func TestPruneIdleRemovesStaleSessions(t *testing.T) {
-	r := newSessionRegistry()
-	fresh := thinking.NewServer()
-	stale := thinking.NewServer()
-	r.add(fresh)
-	r.add(stale)
-
-	// Sleep first so `stale` ages past the cutoff, then advance `fresh` so it
-	// is younger than the cutoff at prune time.
-	time.Sleep(20 * time.Millisecond)
-
-	yes := true
-	td := thinking.ThoughtData{
-		Thought: "x", ThoughtNumber: 1, TotalThoughts: 1,
-		NextThoughtNeeded: &yes, Confidence: 0.5,
-		Assumptions: []string{}, Critique: "c", CounterArgument: "ca",
-		NextStepRationale: "n",
-	}
-	if _, err := fresh.ProcessThought(td); err != nil {
-		t.Fatal(err)
-	}
-
-	r.pruneIdle(10 * time.Millisecond)
-
-	if got := r.count(); got != 1 {
-		t.Errorf("count = %d, want 1 (only fresh should remain)", got)
 	}
 }
 
