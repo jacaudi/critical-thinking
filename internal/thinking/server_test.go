@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -253,5 +254,62 @@ func TestPerBranchConfidence(t *testing.T) {
 	got := resp.BranchConfidences["branch-a"]
 	if !almostEqual(got, 0.3) {
 		t.Errorf("branch-a confidence = %v, want 0.3", got)
+	}
+}
+
+func TestRenderTranscriptIncludesAllSections(t *testing.T) {
+	s := NewServer()
+	td := validInput(1)
+	td.Thought = "I think we should normalize first."
+	td.Assumptions = []string{"row count is current"}
+	td.Critique = "drifted into solution mode"
+	td.CounterArgument = "monolith-first is simpler"
+	td.NextStepRationale = "verify row count next"
+
+	res, err := s.ProcessThought(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Text)
+	}
+
+	for _, want := range []string{
+		"Thought 1 of 3",
+		"confidence 0.50",
+		"I think we should normalize first.",
+		"Assumptions:",
+		"row count is current",
+		"Critique:",
+		"drifted into solution mode",
+		"Counter-argument:",
+		"monolith-first is simpler",
+		"Next, I want to: verify row count next",
+		"session confidence 0.50 across 1 thought",
+	} {
+		if !strings.Contains(res.Text, want) {
+			t.Errorf("transcript missing %q\n--- transcript ---\n%s", want, res.Text)
+		}
+	}
+}
+
+func TestRenderTranscriptEmptyAssumptions(t *testing.T) {
+	s := NewServer()
+	td := validInput(1)
+	td.Assumptions = []string{}
+	res, _ := s.ProcessThought(td)
+	if !strings.Contains(res.Text, "Assumptions: (none claimed)") {
+		t.Errorf("empty assumptions should render as (none claimed); got:\n%s", res.Text)
+	}
+}
+
+func TestRenderTranscriptOmitsNextOnTerminal(t *testing.T) {
+	s := NewServer()
+	td := validInput(1)
+	td.NextThoughtNeeded = boolPtr(false)
+	td.NextStepRationale = ""
+	res, _ := s.ProcessThought(td)
+	if strings.Contains(res.Text, "Next, I want to:") {
+		t.Errorf("terminal thought should omit Next section; got:\n%s", res.Text)
 	}
 }

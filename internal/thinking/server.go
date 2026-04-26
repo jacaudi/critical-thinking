@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -146,10 +146,55 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 	}
 
 	return ToolResult{
-		Text:           "Thought " + strconv.Itoa(td.ThoughtNumber) + " of " + strconv.Itoa(td.TotalThoughts), // expanded in Task 9
+		Text:           s.renderTranscriptLocked(td, sessionConf),
 		StructuredJSON: string(structured),
 		IsError:        false,
 	}, nil
+}
+
+// renderTranscriptLocked builds the rubber-duck transcript text for one thought.
+// Caller must hold s.mu.
+//
+// Pass 1 uses a single header form; pass 2 will introduce revision/branch
+// header variants and a dual-line footer for branch thoughts.
+func (s *SequentialThinkingServer) renderTranscriptLocked(td ThoughtData, sessionConf float64) string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "Thought %d of %d · confidence %.2f\n\n",
+		td.ThoughtNumber, td.TotalThoughts, td.Confidence)
+
+	fmt.Fprintln(&b, td.Thought)
+	fmt.Fprintln(&b)
+
+	// Assumptions.
+	if len(td.Assumptions) == 0 {
+		fmt.Fprintln(&b, "  Assumptions: (none claimed)")
+	} else {
+		fmt.Fprintln(&b, "  Assumptions:")
+		for _, a := range td.Assumptions {
+			fmt.Fprintf(&b, "    - %s\n", a)
+		}
+	}
+	fmt.Fprintln(&b)
+
+	fmt.Fprintln(&b, "  Critique:")
+	fmt.Fprintf(&b, "    %s\n\n", td.Critique)
+
+	fmt.Fprintln(&b, "  Counter-argument:")
+	fmt.Fprintf(&b, "    %s\n\n", td.CounterArgument)
+
+	if *td.NextThoughtNeeded {
+		fmt.Fprintf(&b, "  Next, I want to: %s\n\n", td.NextStepRationale)
+	}
+
+	noun := "thought"
+	if s.confidenceN != 1 {
+		noun = "thoughts"
+	}
+	fmt.Fprintf(&b, "— session confidence %.2f across %d %s",
+		sessionConf, s.confidenceN, noun)
+
+	return b.String()
 }
 
 // errorResult formats a validation/runtime error in the JS-compatible
