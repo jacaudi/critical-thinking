@@ -14,15 +14,15 @@ import (
 // (NextThoughtNeeded, IsRevision, RevisesThought, BranchFromThought,
 // NeedsMoreThoughts) use pointer types so the validator can detect "not sent".
 type ThoughtData struct {
-	Thought           string  `json:"thought"`
-	ThoughtNumber     int     `json:"thoughtNumber"`
-	TotalThoughts     int     `json:"totalThoughts"`
-	NextThoughtNeeded *bool   `json:"nextThoughtNeeded"`
-	IsRevision        *bool   `json:"isRevision,omitempty"`
-	RevisesThought    *int    `json:"revisesThought,omitempty"`
-	BranchFromThought *int    `json:"branchFromThought,omitempty"`
-	BranchID          string  `json:"branchId,omitempty"`
-	NeedsMoreThoughts *bool   `json:"needsMoreThoughts,omitempty"`
+	Thought           string `json:"thought"`
+	ThoughtNumber     int    `json:"thoughtNumber"`
+	TotalThoughts     int    `json:"totalThoughts"`
+	NextThoughtNeeded *bool  `json:"nextThoughtNeeded"`
+	IsRevision        *bool  `json:"isRevision,omitempty"`
+	RevisesThought    *int   `json:"revisesThought,omitempty"`
+	BranchFromThought *int   `json:"branchFromThought,omitempty"`
+	BranchID          string `json:"branchId,omitempty"`
+	NeedsMoreThoughts *bool  `json:"needsMoreThoughts,omitempty"`
 
 	Confidence        float64  `json:"confidence"`
 	Assumptions       []string `json:"assumptions"`
