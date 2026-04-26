@@ -195,6 +195,29 @@ func (c *httpClient) callTool(t *testing.T, args thinking.ThoughtData) thinking.
 	return rpc.Result.StructuredContent
 }
 
+func (c *httpClient) readResource(t *testing.T, uri string) string {
+	t.Helper()
+	c.id++
+	payload := `{"jsonrpc":"2.0","id":` + strconv.Itoa(c.id) +
+		`,"method":"resources/read","params":{"uri":"` + uri + `"}}`
+	_, body := c.post(t, payload, true)
+	jsonText := extractFirstJSON(body)
+	var rpc struct {
+		Result struct {
+			Contents []struct {
+				Text string `json:"text"`
+			} `json:"contents"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(jsonText), &rpc); err != nil {
+		t.Fatalf("unmarshal resource read: %v\nbody=%s\nextracted=%s", err, body, jsonText)
+	}
+	if len(rpc.Result.Contents) == 0 {
+		t.Fatalf("no contents in resource response: %s", body)
+	}
+	return rpc.Result.Contents[0].Text
+}
+
 func (c *httpClient) post(t *testing.T, payload string, withSession bool) (*http.Response, string) {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, c.base+"/mcp", bytes.NewBufferString(payload))
@@ -306,5 +329,39 @@ func TestCrossSessionIsolation(t *testing.T) {
 	// Registry should see both sessions live.
 	if got := registry.count(); got < 2 {
 		t.Errorf("registry count = %d, want >= 2", got)
+	}
+}
+
+func TestThinkingCurrentResourceIsPerSession(t *testing.T) {
+	registry := newSessionRegistry()
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
+		state := thinking.NewServer()
+		registry.add(state)
+		return newMCPServer(state)
+	}, nil)
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcpHandler)
+	ts := httptest.NewServer(withCORS(mux))
+	defer ts.Close()
+
+	clientA := newHTTPClient(t, ts.URL)
+	clientB := newHTTPClient(t, ts.URL)
+	clientA.callTool(t, validInputN(1, "A-resource"))
+	clientB.callTool(t, validInputN(1, "B-resource"))
+
+	readA := clientA.readResource(t, "thinking://current")
+	readB := clientB.readResource(t, "thinking://current")
+
+	if !strings.Contains(readA, "A-resource") {
+		t.Errorf("session A snapshot missing its tag; got:\n%s", readA)
+	}
+	if strings.Contains(readA, "B-resource") {
+		t.Errorf("session A snapshot LEAKED session B's tag; got:\n%s", readA)
+	}
+	if !strings.Contains(readB, "B-resource") {
+		t.Errorf("session B snapshot missing its tag; got:\n%s", readB)
+	}
+	if strings.Contains(readB, "A-resource") {
+		t.Errorf("session B snapshot LEAKED session A's tag; got:\n%s", readB)
 	}
 }

@@ -260,3 +260,31 @@ func sortedKeys(m map[string][]ThoughtData) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// HistorySnapshot returns a deep copy of the trunk + branch thought history,
+// safe to marshal and ship to a resource consumer. Branches are keyed by id.
+type HistorySnapshot struct {
+	Thoughts []ThoughtData            `json:"thoughts"`
+	Branches map[string][]ThoughtData `json:"branches,omitempty"`
+}
+
+// Snapshot returns the current state for the thinking://current resource.
+// The returned slices and map are safe to mutate without affecting the server.
+func (s *SequentialThinkingServer) Snapshot() HistorySnapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	thoughts := make([]ThoughtData, len(s.thoughtHistory))
+	copy(thoughts, s.thoughtHistory)
+
+	var branches map[string][]ThoughtData
+	if len(s.branches) > 0 {
+		branches = make(map[string][]ThoughtData, len(s.branches))
+		for k, v := range s.branches {
+			cp := make([]ThoughtData, len(v))
+			copy(cp, v)
+			branches[k] = cp
+		}
+	}
+	return HistorySnapshot{Thoughts: thoughts, Branches: branches}
+}

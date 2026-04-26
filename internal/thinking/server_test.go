@@ -390,6 +390,43 @@ func TestBranchSubsequentHeader(t *testing.T) {
 	}
 }
 
+func TestSnapshotDeepCopiesThoughts(t *testing.T) {
+	s := NewServer()
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	snap := s.Snapshot()
+	if len(snap.Thoughts) != 1 {
+		t.Fatalf("snapshot length = %d, want 1", len(snap.Thoughts))
+	}
+	// Mutating the snapshot must not affect the server.
+	snap.Thoughts[0].Thought = "MUTATED"
+	if _, err := s.ProcessThought(validInput(2)); err != nil {
+		t.Fatal(err)
+	}
+	snap2 := s.Snapshot()
+	if snap2.Thoughts[0].Thought == "MUTATED" {
+		t.Errorf("snapshot is shallow — mutating snapshot leaked into server state")
+	}
+}
+
+func TestSnapshotIncludesBranches(t *testing.T) {
+	s := NewServer()
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	td := validInput(2)
+	td.BranchFromThought = intPtr(1)
+	td.BranchID = "alt"
+	if _, err := s.ProcessThought(td); err != nil {
+		t.Fatal(err)
+	}
+	snap := s.Snapshot()
+	if got, ok := snap.Branches["alt"]; !ok || len(got) != 1 {
+		t.Errorf("branch 'alt' missing or empty in snapshot: %+v", snap.Branches)
+	}
+}
+
 func TestBranchDualFooter(t *testing.T) {
 	s := NewServer()
 	// Trunk seed

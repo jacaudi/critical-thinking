@@ -149,6 +149,13 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 		},
 	}, makeToolHandler(state))
 
+	srv.AddResource(&mcp.Resource{
+		Name:        "thinking_current",
+		Description: "Full thought history for the current session, including all critical-thinking fields (confidence, assumptions, critique, counterArgument).",
+		URI:         "thinking://current",
+		MIMEType:    "application/json",
+	}, makeResourceHandler(state))
+
 	return srv
 }
 
@@ -179,6 +186,28 @@ func makeToolHandler(state *thinking.SequentialThinkingServer) func(context.Cont
 			return callResult, nil, nil
 		}
 		return callResult, structured, nil
+	}
+}
+
+// makeResourceHandler closes over a per-session state and returns a
+// ResourceHandler that always returns this session's snapshot, regardless of
+// the requested URI. We deliberately do NOT support a thinking://sessions
+// listing or thinking://{id} lookup — that would expose the existence of
+// other sessions and violate the cross-session isolation invariant.
+func makeResourceHandler(state *thinking.SequentialThinkingServer) func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		snap := state.Snapshot()
+		body, err := json.MarshalIndent(snap, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{{
+				URI:      req.Params.URI,
+				MIMEType: "application/json",
+				Text:     string(body),
+			}},
+		}, nil
 	}
 }
 
