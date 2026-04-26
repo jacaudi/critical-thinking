@@ -3,6 +3,11 @@
 // adapter that bridges this package to the SDK.
 package thinking
 
+import (
+	"errors"
+	"fmt"
+)
+
 // ThoughtData is the input to one criticalthinking tool call.
 //
 // Sent fields whose omission cannot be distinguished from their zero value
@@ -35,4 +40,37 @@ type ThoughtResponse struct {
 	ThoughtHistoryLength int                `json:"thoughtHistoryLength"`
 	SessionConfidence    float64            `json:"sessionConfidence"`
 	BranchConfidences    map[string]float64 `json:"branchConfidences,omitempty"`
+}
+
+// Validate enforces every wire-format rule for ThoughtData except those that
+// require knowing the current session state (RevisesThought / BranchFromThought
+// range checks). Those run separately in SequentialThinkingServer.ProcessThought.
+//
+// Returns the first error encountered; callers that want all errors should
+// extend this with a multi-error type later.
+func (td ThoughtData) Validate() error {
+	if td.Thought == "" {
+		return errors.New("thought must be a non-empty string")
+	}
+	if td.ThoughtNumber < 1 {
+		return errors.New("thoughtNumber must be ≥ 1")
+	}
+	if td.TotalThoughts < 1 {
+		return errors.New("totalThoughts must be ≥ 1")
+	}
+	if td.NextThoughtNeeded == nil {
+		return errors.New("nextThoughtNeeded must be present (true or false)")
+	}
+	if td.Critique == "" {
+		return errors.New("critique must be a non-empty string")
+	}
+	if td.CounterArgument == "" {
+		return errors.New("counterArgument must be a non-empty string")
+	}
+	if td.Assumptions == nil {
+		return errors.New("assumptions must be present (use [] if none)")
+	}
+	// Ignore unused fmt for now; will be used in Task 4 for ranged errors.
+	_ = fmt.Sprintf
+	return nil
 }
