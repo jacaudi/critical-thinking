@@ -6,3 +6,12 @@ dist
 .clinerules
 .claude
 .private-journal/
+
+# Worktrees (project-local isolated workspaces)
+.worktrees/
+
+# Working/agent-only documents (not committed to repo)
+docs/codebase-review.md
+docs/plans/2025-11-21-go-multiuser-sequential-thinking.md
+docs/plans/2026-04-25-rubber-ducky-mcp-design.md
+docs/plans/2026-04-25-rubber-ducky-mcp-implementation.md
