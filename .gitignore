@@ -1,11 +1,22 @@
-node_modules
-dist
-.env
-*.DS_Store
-.cursorrules
-.clinerules
+# Binaries
+/rubber-ducky-thinking
+*.exe
+*.test
+*.out
+
+# Coverage
+coverage.txt
+
+# Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Agent state
 .claude
 .private-journal/
+.cursorrules
+.clinerules
 
 # Worktrees (project-local isolated workspaces)
 .worktrees/
