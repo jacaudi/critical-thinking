@@ -3,6 +3,7 @@ package thinking
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -121,7 +122,7 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 	}
 
 	return ToolResult{
-		Text:           "Thought " + itoaInt(td.ThoughtNumber) + " of " + itoaInt(td.TotalThoughts), // expanded in Task 9
+		Text:           "Thought " + strconv.Itoa(td.ThoughtNumber) + " of " + strconv.Itoa(td.TotalThoughts), // expanded in Task 9
 		StructuredJSON: string(structured),
 		IsError:        false,
 	}, nil
@@ -130,13 +131,10 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 // errorResult formats a validation/runtime error in the JS-compatible
 // {error, status: "failed"} shape.
 func errorResult(err error) ToolResult {
+	// Marshaling a fixed-shape {string,string} struct cannot fail.
 	body, _ := json.Marshal(struct {
 		Error  string `json:"error"`
 		Status string `json:"status"`
 	}{Error: err.Error(), Status: "failed"})
 	return ToolResult{Text: string(body), IsError: true}
-}
-
-func itoaInt(i int) string {
-	return fmt.Sprintf("%d", i)
 }

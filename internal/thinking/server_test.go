@@ -2,7 +2,9 @@ package thinking
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
+	"time"
 )
 
 func TestNewServerStartsEmpty(t *testing.T) {
@@ -20,7 +22,7 @@ func TestNewServerStartsEmpty(t *testing.T) {
 
 func validInput(num int) ThoughtData {
 	return ThoughtData{
-		Thought:           "thought number " + itoa(num),
+		Thought:           "thought number " + strconv.Itoa(num),
 		ThoughtNumber:     num,
 		TotalThoughts:     3,
 		NextThoughtNeeded: boolPtr(true),
@@ -30,25 +32,6 @@ func validInput(num int) ThoughtData {
 		CounterArgument:   "alternative",
 		NextStepRationale: "next thing",
 	}
-}
-
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	digits := []byte{}
-	neg := i < 0
-	if neg {
-		i = -i
-	}
-	for i > 0 {
-		digits = append([]byte{byte('0' + i%10)}, digits...)
-		i /= 10
-	}
-	if neg {
-		return "-" + string(digits)
-	}
-	return string(digits)
 }
 
 func TestProcessThoughtAppendsHistory(t *testing.T) {
@@ -104,5 +87,44 @@ func TestProcessThoughtValidationError(t *testing.T) {
 	}
 	if got := s.HistoryLength(); got != 0 {
 		t.Errorf("validation failure should not mutate state, HistoryLength=%d", got)
+	}
+}
+
+func TestProcessThoughtRevisesOutOfRange(t *testing.T) {
+	s := NewServer()
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	td := validInput(2)
+	td.IsRevision = boolPtr(true)
+	td.RevisesThought = intPtr(99) // history only has 1 thought
+	res, err := s.ProcessThought(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError for out-of-range revisesThought")
+	}
+	if !contains(res.Text, "revisesThought 99 out of range") {
+		t.Errorf("error message: %s", res.Text)
+	}
+	if got := s.HistoryLength(); got != 1 {
+		t.Errorf("range failure should not append; HistoryLength = %d, want 1", got)
+	}
+}
+
+func TestProcessThoughtAdvancesLastAccessed(t *testing.T) {
+	s := NewServer()
+	before := s.LastAccessed()
+	// Sleep a tiny amount to ensure the timestamp can advance.
+	// time.Now() resolution is platform-dependent but consistently >= 1µs on
+	// supported targets, so a 1ms sleep is more than enough.
+	time.Sleep(time.Millisecond)
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	after := s.LastAccessed()
+	if !after.After(before) {
+		t.Errorf("LastAccessed did not advance: before=%v after=%v", before, after)
 	}
 }
