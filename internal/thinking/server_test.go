@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -311,5 +312,32 @@ func TestRenderTranscriptOmitsNextOnTerminal(t *testing.T) {
 	res, _ := s.ProcessThought(td)
 	if strings.Contains(res.Text, "Next, I want to:") {
 		t.Errorf("terminal thought should omit Next section; got:\n%s", res.Text)
+	}
+}
+
+func TestProcessThoughtConcurrent(t *testing.T) {
+	s := NewServer()
+	const goroutines = 100
+	const perGoroutine = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(gID int) {
+			defer wg.Done()
+			for i := 0; i < perGoroutine; i++ {
+				td := validInput(gID*perGoroutine + i + 1)
+				td.TotalThoughts = goroutines * perGoroutine
+				if _, err := s.ProcessThought(td); err != nil {
+					t.Errorf("goroutine %d iter %d: %v", gID, i, err)
+					return
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	if got := s.HistoryLength(); got != goroutines*perGoroutine {
+		t.Errorf("HistoryLength = %d, want %d", got, goroutines*perGoroutine)
 	}
 }
