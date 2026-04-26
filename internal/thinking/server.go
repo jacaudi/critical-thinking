@@ -3,6 +3,7 @@ package thinking
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -102,6 +103,10 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 	s.thoughtHistory = append(s.thoughtHistory, td)
 	s.lastAccessed = time.Now()
 
+	if td.BranchFromThought != nil && td.BranchID != "" {
+		s.branches[td.BranchID] = append(s.branches[td.BranchID], td)
+	}
+
 	// Trunk-only confidence aggregation in this task; per-branch added in Task 8.
 	s.confidenceSum += td.Confidence
 	s.confidenceN++
@@ -110,7 +115,7 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 		ThoughtNumber:        td.ThoughtNumber,
 		TotalThoughts:        td.TotalThoughts,
 		NextThoughtNeeded:    *td.NextThoughtNeeded,
-		Branches:             []string{}, // populated in Task 7
+		Branches:             sortedKeys(s.branches),
 		ThoughtHistoryLength: len(s.thoughtHistory),
 		SessionConfidence:    s.confidenceSum / float64(s.confidenceN),
 	}
@@ -137,4 +142,13 @@ func errorResult(err error) ToolResult {
 		Status string `json:"status"`
 	}{Error: err.Error(), Status: "failed"})
 	return ToolResult{Text: string(body), IsError: true}
+}
+
+func sortedKeys(m map[string][]ThoughtData) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

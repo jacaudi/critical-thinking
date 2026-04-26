@@ -2,6 +2,7 @@ package thinking
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -126,5 +127,67 @@ func TestProcessThoughtAdvancesLastAccessed(t *testing.T) {
 	after := s.LastAccessed()
 	if !after.After(before) {
 		t.Errorf("LastAccessed did not advance: before=%v after=%v", before, after)
+	}
+}
+
+func TestProcessThoughtRecordsBranch(t *testing.T) {
+	s := NewServer()
+
+	// Trunk thought 1.
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Branch from thought 1.
+	td := validInput(2)
+	td.BranchFromThought = intPtr(1)
+	td.BranchID = "branch-a"
+	res, err := s.ProcessThought(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error: %s", res.Text)
+	}
+
+	var resp ThoughtResponse
+	_ = json.Unmarshal([]byte(res.StructuredJSON), &resp)
+	sort.Strings(resp.Branches)
+	if len(resp.Branches) != 1 || resp.Branches[0] != "branch-a" {
+		t.Errorf("Branches = %v, want [branch-a]", resp.Branches)
+	}
+}
+
+func TestProcessThoughtRevisionRangeCheck(t *testing.T) {
+	s := NewServer()
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	td := validInput(2)
+	td.IsRevision = boolPtr(true)
+	td.RevisesThought = intPtr(5) // out of range, only 1 in history
+	res, err := s.ProcessThought(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError for out-of-range revisesThought")
+	}
+	if !contains(res.Text, "revisesThought 5 out of range") {
+		t.Errorf("error message: %s", res.Text)
+	}
+}
+
+func TestProcessThoughtBranchFromOutOfRange(t *testing.T) {
+	s := NewServer()
+	td := validInput(1)
+	td.BranchFromThought = intPtr(99)
+	td.BranchID = "branch-a"
+	res, err := s.ProcessThought(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError for out-of-range branchFromThought")
 	}
 }
