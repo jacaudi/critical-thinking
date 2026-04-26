@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jacaudi/rubber-ducky-mcp/internal/thinking"
@@ -20,6 +23,12 @@ import (
 var version = "dev"
 
 var httpAddr = flag.String("http", "", "if set (e.g., \":3000\"), serve Streamable HTTP at this address; otherwise use stdio")
+
+const (
+	idleTimeout     = 60 * time.Minute
+	cleanupInterval = 5 * time.Minute
+	shutdownGrace   = 10 * time.Second
+)
 
 func main() {
 	flag.Parse()
@@ -55,6 +64,9 @@ func runStdio() {
 // because the tool handler captures one state and never reads from the
 // registry.
 func runHTTP(addr string) {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
 	registry := newSessionRegistry()
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
@@ -80,9 +92,38 @@ func runHTTP(addr string) {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	go runIdleCleanup(ctx, registry)
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("shutdown: %v", err)
+		}
+	}()
+
 	log.Printf("rubber-ducky-thinking %s listening on http://%s", version, listenAddr)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("listen: %v", err)
+	}
+}
+
+// runIdleCleanup ticks every cleanupInterval and prunes sessions whose
+// LastAccessed is older than idleTimeout. The registry's `states` slice is
+// rebuilt without timed-out entries; the SequentialThinkingServer instances
+// themselves become unreachable and get garbage-collected (the tool handler
+// for that session also goes out of scope when the SDK closes the transport).
+func runIdleCleanup(ctx context.Context, r *sessionRegistry) {
+	t := time.NewTicker(cleanupInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			r.pruneIdle(idleTimeout)
+		}
 	}
 }
 
@@ -162,6 +203,19 @@ func (r *sessionRegistry) count() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.states)
+}
+
+func (r *sessionRegistry) pruneIdle(maxIdle time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cutoff := time.Now().Add(-maxIdle)
+	out := r.states[:0]
+	for _, s := range r.states {
+		if s.LastAccessed().After(cutoff) {
+			out = append(out, s)
+		}
+	}
+	r.states = out
 }
 
 // withCORS gates browser access via the ALLOWED_ORIGINS env var (comma-

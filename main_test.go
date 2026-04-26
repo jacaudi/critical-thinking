@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jacaudi/rubber-ducky-mcp/internal/thinking"
 )
@@ -105,5 +106,34 @@ func TestHealthEndpoint(t *testing.T) {
 	// version may be "dev" or whatever -ldflags set; just confirm non-empty.
 	if body.Version == "" {
 		t.Errorf("version is empty")
+	}
+}
+
+func TestPruneIdleRemovesStaleSessions(t *testing.T) {
+	r := newSessionRegistry()
+	fresh := thinking.NewServer()
+	stale := thinking.NewServer()
+	r.add(fresh)
+	r.add(stale)
+
+	// Sleep first so `stale` ages past the cutoff, then advance `fresh` so it
+	// is younger than the cutoff at prune time.
+	time.Sleep(20 * time.Millisecond)
+
+	yes := true
+	td := thinking.ThoughtData{
+		Thought: "x", ThoughtNumber: 1, TotalThoughts: 1,
+		NextThoughtNeeded: &yes, Confidence: 0.5,
+		Assumptions: []string{}, Critique: "c", CounterArgument: "ca",
+		NextStepRationale: "n",
+	}
+	if _, err := fresh.ProcessThought(td); err != nil {
+		t.Fatal(err)
+	}
+
+	r.pruneIdle(10 * time.Millisecond)
+
+	if got := r.count(); got != 1 {
+		t.Errorf("count = %d, want 1 (only fresh should remain)", got)
 	}
 }
