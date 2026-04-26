@@ -145,3 +145,87 @@ func stringIndex(s, substr string) int {
 	}
 	return -1
 }
+
+func TestValidateConfidenceRange(t *testing.T) {
+	cases := []struct {
+		name       string
+		confidence float64
+		wantOK     bool
+	}{
+		{"below zero", -0.01, false},
+		{"zero", 0.0, true},
+		{"midpoint", 0.5, true},
+		{"one", 1.0, true},
+		{"above one", 1.01, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			td := validBase()
+			td.Confidence = tc.confidence
+			err := td.Validate()
+			if tc.wantOK && err != nil {
+				t.Errorf("confidence %v should validate, got: %v", tc.confidence, err)
+			}
+			if !tc.wantOK && err == nil {
+				t.Errorf("confidence %v should fail validation", tc.confidence)
+			}
+		})
+	}
+}
+
+func TestValidateConditionalNextStepRationale(t *testing.T) {
+	t.Run("required when nextThoughtNeeded=true", func(t *testing.T) {
+		td := validBase()
+		td.NextThoughtNeeded = boolPtr(true)
+		td.NextStepRationale = ""
+		err := td.Validate()
+		if err == nil || !contains(err.Error(), "nextStepRationale required") {
+			t.Errorf("expected nextStepRationale error, got %v", err)
+		}
+	})
+	t.Run("ignored when nextThoughtNeeded=false", func(t *testing.T) {
+		td := validBase()
+		td.NextThoughtNeeded = boolPtr(false)
+		td.NextStepRationale = ""
+		if err := td.Validate(); err != nil {
+			t.Errorf("nextStepRationale empty should be OK when nextThoughtNeeded=false, got: %v", err)
+		}
+	})
+}
+
+func TestValidateBranchBothOrNeither(t *testing.T) {
+	t.Run("both present", func(t *testing.T) {
+		td := validBase()
+		td.BranchFromThought = intPtr(1)
+		td.BranchID = "branch-a"
+		if err := td.Validate(); err != nil {
+			t.Errorf("both branch fields present should validate, got: %v", err)
+		}
+	})
+	t.Run("both absent", func(t *testing.T) {
+		td := validBase()
+		td.BranchFromThought = nil
+		td.BranchID = ""
+		if err := td.Validate(); err != nil {
+			t.Errorf("both branch fields absent should validate, got: %v", err)
+		}
+	})
+	t.Run("only BranchFromThought", func(t *testing.T) {
+		td := validBase()
+		td.BranchFromThought = intPtr(1)
+		td.BranchID = ""
+		err := td.Validate()
+		if err == nil || !contains(err.Error(), "branchFromThought and branchId") {
+			t.Errorf("expected both-or-neither error, got %v", err)
+		}
+	})
+	t.Run("only BranchID", func(t *testing.T) {
+		td := validBase()
+		td.BranchFromThought = nil
+		td.BranchID = "branch-a"
+		err := td.Validate()
+		if err == nil || !contains(err.Error(), "branchFromThought and branchId") {
+			t.Errorf("expected both-or-neither error, got %v", err)
+		}
+	})
+}

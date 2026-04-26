@@ -61,16 +61,34 @@ func (td ThoughtData) Validate() error {
 	if td.NextThoughtNeeded == nil {
 		return errors.New("nextThoughtNeeded must be present (true or false)")
 	}
+	if td.Confidence < 0.0 || td.Confidence > 1.0 {
+		return fmt.Errorf("confidence must be between 0.0 and 1.0 (got %v)", td.Confidence)
+	}
+	if td.Assumptions == nil {
+		return errors.New("assumptions must be present (use [] if none)")
+	}
 	if td.Critique == "" {
 		return errors.New("critique must be a non-empty string")
 	}
 	if td.CounterArgument == "" {
 		return errors.New("counterArgument must be a non-empty string")
 	}
-	if td.Assumptions == nil {
-		return errors.New("assumptions must be present (use [] if none)")
+	if *td.NextThoughtNeeded && td.NextStepRationale == "" {
+		return errors.New("nextStepRationale required when nextThoughtNeeded is true")
 	}
-	// Ignore unused fmt for now; will be used in Task 4 for ranged errors.
-	_ = fmt.Sprintf
+
+	// Both-or-neither rule for branch fields.
+	hasFrom := td.BranchFromThought != nil
+	hasID := td.BranchID != ""
+	if hasFrom != hasID {
+		return errors.New("branchFromThought and branchId must both be present or both omitted")
+	}
+	if hasFrom && *td.BranchFromThought < 1 {
+		return fmt.Errorf("branchFromThought must be ≥ 1 (got %d)", *td.BranchFromThought)
+	}
+	if td.RevisesThought != nil && *td.RevisesThought < 1 {
+		return fmt.Errorf("revisesThought must be ≥ 1 (got %d)", *td.RevisesThought)
+	}
+
 	return nil
 }
