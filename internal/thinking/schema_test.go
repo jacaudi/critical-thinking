@@ -2,6 +2,7 @@ package thinking
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -189,6 +190,90 @@ func TestValidateConditionalNextStepRationale(t *testing.T) {
 		td.NextStepRationale = ""
 		if err := td.Validate(); err != nil {
 			t.Errorf("nextStepRationale empty should be OK when nextThoughtNeeded=false, got: %v", err)
+		}
+	})
+}
+
+func TestValidateLengthCaps(t *testing.T) {
+	t.Run("critique at cap is allowed", func(t *testing.T) {
+		td := validBase()
+		td.Critique = strings.Repeat("x", maxCritiqueLen)
+		if err := td.Validate(); err != nil {
+			t.Errorf("critique at cap should validate, got: %v", err)
+		}
+	})
+	t.Run("critique over cap rejected", func(t *testing.T) {
+		td := validBase()
+		td.Critique = strings.Repeat("x", maxCritiqueLen+1)
+		err := td.Validate()
+		if err == nil || !contains(err.Error(), "critique must be ≤") {
+			t.Errorf("expected critique length error, got %v", err)
+		}
+	})
+	t.Run("counterArgument at cap is allowed", func(t *testing.T) {
+		td := validBase()
+		td.CounterArgument = strings.Repeat("x", maxCounterArgumentLen)
+		if err := td.Validate(); err != nil {
+			t.Errorf("counterArgument at cap should validate, got: %v", err)
+		}
+	})
+	t.Run("counterArgument over cap rejected", func(t *testing.T) {
+		td := validBase()
+		td.CounterArgument = strings.Repeat("x", maxCounterArgumentLen+1)
+		err := td.Validate()
+		if err == nil || !contains(err.Error(), "counterArgument must be ≤") {
+			t.Errorf("expected counterArgument length error, got %v", err)
+		}
+	})
+	t.Run("assumption entry at cap is allowed", func(t *testing.T) {
+		td := validBase()
+		td.Assumptions = []string{strings.Repeat("x", maxAssumptionLen)}
+		if err := td.Validate(); err != nil {
+			t.Errorf("assumption at cap should validate, got: %v", err)
+		}
+	})
+	t.Run("assumption entry over cap rejected", func(t *testing.T) {
+		td := validBase()
+		td.Assumptions = []string{"ok", strings.Repeat("x", maxAssumptionLen+1)}
+		err := td.Validate()
+		if err == nil || !contains(err.Error(), "assumptions[1] must be ≤") {
+			t.Errorf("expected assumption length error, got %v", err)
+		}
+	})
+	t.Run("nextStepRationale over cap rejected when needed", func(t *testing.T) {
+		td := validBase()
+		td.NextThoughtNeeded = boolPtr(true)
+		td.NextStepRationale = strings.Repeat("x", maxNextStepRationaleLen+1)
+		err := td.Validate()
+		if err == nil || !contains(err.Error(), "nextStepRationale must be ≤") {
+			t.Errorf("expected nextStepRationale length error, got %v", err)
+		}
+	})
+	t.Run("nextStepRationale length not enforced when not needed", func(t *testing.T) {
+		// When nextThoughtNeeded=false, the field is logically absent and any
+		// stale value is benign — no length check.
+		td := validBase()
+		td.NextThoughtNeeded = boolPtr(false)
+		td.NextStepRationale = strings.Repeat("x", maxNextStepRationaleLen+500)
+		if err := td.Validate(); err != nil {
+			t.Errorf("nextStepRationale length should not fire when nextThoughtNeeded=false, got: %v", err)
+		}
+	})
+	t.Run("rune-counted not byte-counted", func(t *testing.T) {
+		// 200 em-dashes (each 3 bytes in UTF-8, 1 rune). Should be rejected
+		// for nextStepRationale (cap 200) only because we go one rune over.
+		td := validBase()
+		td.NextThoughtNeeded = boolPtr(true)
+		td.NextStepRationale = ""
+		for range maxNextStepRationaleLen {
+			td.NextStepRationale += "—"
+		}
+		if err := td.Validate(); err != nil {
+			t.Errorf("exactly cap runes should validate, got: %v", err)
+		}
+		td.NextStepRationale += "—"
+		if err := td.Validate(); err == nil {
+			t.Errorf("one rune over cap should be rejected")
 		}
 	})
 }

@@ -6,6 +6,17 @@ package thinking
 import (
 	"errors"
 	"fmt"
+	"unicode/utf8"
+)
+
+// Length caps on the critical-thinking fields. Limits are in runes, not bytes,
+// so multi-byte text (em-dashes, accented chars) doesn't get unfairly truncated.
+// These force one-sentence-per-field discipline; padded prose returns an error.
+const (
+	maxCritiqueLen          = 280
+	maxCounterArgumentLen   = 280
+	maxNextStepRationaleLen = 200
+	maxAssumptionLen        = 200
 )
 
 // ThoughtData is the input to one criticalthinking tool call.
@@ -70,12 +81,31 @@ func (td ThoughtData) Validate() error {
 	if td.Critique == "" {
 		return errors.New("critique must be a non-empty string")
 	}
+	if n := utf8.RuneCountInString(td.Critique); n > maxCritiqueLen {
+		return fmt.Errorf("critique must be ≤ %d chars, got %d (one tight sentence; the thought field is for narration)", maxCritiqueLen, n)
+	}
 	if td.CounterArgument == "" {
 		return errors.New("counterArgument must be a non-empty string")
 	}
-	if *td.NextThoughtNeeded && td.NextStepRationale == "" {
-		return errors.New("nextStepRationale required when nextThoughtNeeded is true")
+	if n := utf8.RuneCountInString(td.CounterArgument); n > maxCounterArgumentLen {
+		return fmt.Errorf("counterArgument must be ≤ %d chars, got %d (one tight sentence; the thought field is for narration)", maxCounterArgumentLen, n)
 	}
+	for i, a := range td.Assumptions {
+		if n := utf8.RuneCountInString(a); n > maxAssumptionLen {
+			return fmt.Errorf("assumptions[%d] must be ≤ %d chars, got %d (one fact per entry)", i, maxAssumptionLen, n)
+		}
+	}
+	if *td.NextThoughtNeeded {
+		if td.NextStepRationale == "" {
+			return errors.New("nextStepRationale required when nextThoughtNeeded is true")
+		}
+		if n := utf8.RuneCountInString(td.NextStepRationale); n > maxNextStepRationaleLen {
+			return fmt.Errorf("nextStepRationale must be ≤ %d chars, got %d (one sentence)", maxNextStepRationaleLen, n)
+		}
+	}
+	// When nextThoughtNeeded=false, NextStepRationale is logically absent — we
+	// don't enforce the length cap. Clients are advised to OMIT the field; a
+	// stale value here is benign and ignored.
 
 	// Both-or-neither rule for branch fields.
 	hasFrom := td.BranchFromThought != nil

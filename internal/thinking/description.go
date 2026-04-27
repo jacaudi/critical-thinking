@@ -43,19 +43,27 @@ Then, in the same call, you provide:
 
   - confidence (0.0–1.0): How sure are you, *honestly*? 0.5 means a coin flip.
                           High confidence (>0.8) requires evidence, not enthusiasm.
-  - assumptions (string[]): What are you taking for granted? List them. If you
-                            genuinely believe there are none, send [] and own that
-                            claim.
-  - critique (string, required, non-empty): What is weak, suspect, or
-                            under-examined about the thought you just produced?
-                            "Looks good" is not a critique. Be your own toughest
-                            reviewer.
-  - counterArgument (string, required, non-empty): The strongest case AGAINST
-                            this thought. Steelman the opposition. If you can't
+  - assumptions (string[]): What are you taking for granted? List them as
+                            bullets — each one ≤ 200 chars, one fact per entry.
+                            Send [] only if you've genuinely accounted for none.
+  - critique (string, required, non-empty, ≤ 280 chars):
+                            What is weak, suspect, or under-examined about the
+                            thought you just produced? One tight sentence naming
+                            a SPECIFIC weakness. "Looks good" is not a critique;
+                            neither is a paragraph of generic self-doubt.
+  - counterArgument (string, required, non-empty, ≤ 280 chars):
+                            The strongest case AGAINST this thought, in one
+                            sentence. Steelman the opposition. If you can't
                             think of one, your confidence is wrong.
-  - nextStepRationale (string, required when nextThoughtNeeded=true):
+  - nextStepRationale (string, ≤ 200 chars, REQUIRED when nextThoughtNeeded=true,
+                            OMIT when nextThoughtNeeded=false):
                             Why is *this* the next thought, not some other one?
-                            What did this one rule out, open up, or expose?
+                            One sentence: what this thought ruled out, opened up,
+                            or exposed.
+
+Brevity discipline: 'thought' is your narration; the critical fields are
+bullets, not paragraphs. One tight sentence each, enforced server-side. A
+specific weakness in 20 words beats vague self-doubt in 200.
 
 Voice and register for the thought field:
   - First-person, narrative, exploratory. "I think... but wait... actually..."

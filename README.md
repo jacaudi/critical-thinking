@@ -67,6 +67,7 @@ This is the Go successor to `jacaudi/http-sequential-thinking`. Breaking changes
 - **Server name renamed:** `sequential-thinking-server` → `rubber-ducky-thinking`.
 - **Web UI removed.** Use MCP Inspector or `curl` for manual testing.
 - **CORS default tightened.** Set `ALLOWED_ORIGINS` explicitly to allow browser clients.
+- **Length caps on critical fields (server-side).** `critique` ≤ 280 chars, `counterArgument` ≤ 280, each `assumptions[i]` ≤ 200, `nextStepRationale` ≤ 200 (only enforced when `nextThoughtNeeded=true`). Caps are rune-counted and force one-sentence-per-field discipline; padded prose returns `IsError: true`.
 
 ## Development
 
