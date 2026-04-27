@@ -1,125 +1,82 @@
-# Sequential Thinking MCP Server - Streamable HTTP Implementation
+# Rubber Ducky MCP
 
-An MCP server that provides a powerful sequential thinking tool for complex problem-solving through thoughts.
+A Model Context Protocol server for **critical, narrated, sequential thinking**. A rubber duck you talk to while you think, one step at a time, with required confidence calibration and adversarial self-critique on every thought.
 
-This server enables AI assistants to work through problems step-by-step, with the ability to revise, branch, and explore alternative approaches as understanding deepens.
+This server fuses three disciplines:
 
-## Features
+1. **Sequential thinking** — break problems into ordered, numbered steps; revise; branch.
+2. **Rubber-duck narration** — explain each thought out loud, in first-person, to an imagined listener.
+3. **Critical self-examination** — every thought is paired with confidence, assumptions, critique, and a counter-argument.
 
-- **Dynamic Thought Process**: Adjust the number of thoughts as you progress
-- **Revision Capability**: Question and revise previous thoughts
-- **Branching Logic**: Explore alternative approaches
-- **Flexible Planning**: Add more thoughts even after reaching initial estimates
-- **Context Preservation**: Maintain context across multiple thinking steps
+The single tool is `criticalthinking`. Every call must include the critical-thinking fields — there is no opt-out, by design. See the tool description for the full contract.
 
-## Getting Started
+## Install
 
-To get started with this server, clone the repository and install the necessary dependencies.
+### Go
 
 ```bash
-git clone https://github.com/jacaudi/http-sequential-thinking.git
-cd http-sequential-thinking
-npm install
+go install github.com/jacaudi/rubber-ducky-mcp@latest
+# binary lands at $GOPATH/bin/rubber-ducky-mcp
 ```
 
-## Usage
-
-### Streamable HTTP Transport
-
-The server uses the modern Streamable HTTP transport protocol for communication. Start the server:
+### Docker
 
 ```bash
-npm start
+docker run --rm -p 3000:3000 ghcr.io/jacaudi/rubber-ducky-mcp:latest
 ```
 
-The server will start on `http://127.0.0.1:3000` by default. You can change the port using the `PORT` environment variable:
+## Run
+
+### Stdio (default)
 
 ```bash
-PORT=8080 npm start
+rubber-ducky-thinking
 ```
 
-### Endpoints
+Use this for direct integration with MCP hosts (Claude Desktop, Codex CLI, VS Code).
 
-- **MCP Endpoint**: `POST/GET/DELETE http://127.0.0.1:3000/mcp` - Main MCP communication endpoint
-  - `POST` - Send messages to the server (initialize, tool calls, etc.)
-  - `GET` - Establish SSE stream for server-to-client notifications
-  - `DELETE` - Terminate session
-- **Health Check**: `GET http://127.0.0.1:3000/health` - Check server status and active sessions
-- **Test Interface**: `GET http://127.0.0.1:3000/` - Browser-based test interface
+### Streamable HTTP
 
-### Transport Features
-
-The Streamable HTTP transport provides several advantages:
-
-- **Session-Based State**: Manages state for each client session in memory. The core server is long-running and can be scaled with sticky sessions.
-- **Flexible Streaming**: Server can upgrade any response to SSE for streaming
-- **Infrastructure Compatible**: Works with standard HTTP middleware and proxies
-- **Resumable Connections**: Support for connection resumption
-- **Automatic Session Cleanup**: Inactive sessions and their associated data are automatically cleared after 1 hour to conserve resources.
-
-### Security
-
-The implementation includes security measures:
-- Origin header validation to prevent DNS rebinding attacks
-- Server binds only to localhost (127.0.0.1)
-- CORS headers are properly configured
-- Session IDs are cryptographically secure
-- **Privacy by Design**: No sensitive tool inputs or outputs are logged to the console.
-
-### Adding to Cursor
-
-To use this server with Cursor, add the following to your Cursor configuration:
-
-```json
-{
-  "mcpServers": {
-    "sequential-thinking": {
-      "url": "http://localhost:3000/mcp"
-    },
-  }
-}
+```bash
+rubber-ducky-thinking -http :3000
 ```
 
-### Running with Docker
+Endpoints:
 
-You can also run the server in a containerized environment using Docker for easier deployment and isolation.
+- `POST/GET/DELETE /mcp` — main MCP endpoint.
+- `GET /health` — `{status, transport, sessionsCreated, version}`. `sessionsCreated` is a lifetime counter of sessions ever created in this process; it is NOT pruned when the SDK closes idle sessions.
 
-1.  **Build the Docker image:**
-    ```bash
-    docker build -t http-sequential-thinking .
-    ```
+## Configuration
 
-2.  **Run the Docker container:**
-    ```bash
-    docker run -p 3000:3000 http-sequential-thinking
-    ```
+| Env var | Default | Purpose |
+|---|---|---|
+| `ALLOWED_ORIGINS` | (empty) | Comma-separated list of browser origins permitted to call `/mcp`. Wired into both the outer CORS layer and the SDK's CSRF protection (`http.CrossOriginProtection.AddTrustedOrigin`). Default rejects all browser origins. Non-browser callers (no `Origin` / no `Sec-Fetch-Site` header) are unaffected. |
+| `DOCKER` | unset | When `true`, HTTP server binds to `0.0.0.0` instead of `127.0.0.1`. Set automatically in the published Docker image. |
+| `DISABLE_THOUGHT_LOGGING` | unset | Reserved for the future structured-log gate. The current server emits no per-thought logs by default. |
 
-The server will be accessible at `http://127.0.0.1:3000`.
+Sessions are in-memory only; idle sessions expire after 1 hour (enforced by the SDK via `StreamableHTTPOptions.SessionTimeout`).
 
-## Available Tool
+## Migrating from `http-sequential-thinking`
 
-### sequentialthinking
+This is the Go successor to `jacaudi/http-sequential-thinking`. Breaking changes:
 
-A detailed tool for dynamic and reflective problem-solving through thoughts.
+- **Tool renamed:** `sequentialthinking` → `criticalthinking`. Update `mcp.json` references.
+- **Required new fields:** every call must send `confidence`, `assumptions`, `critique`, `counterArgument`. Calls missing these fail with `IsError: true`.
+- **`nextStepRationale` required when `nextThoughtNeeded: true`.**
+- **Binary renamed:** `http-sequential-thinking` → `rubber-ducky-thinking`. Update `mcp.json` `command` fields and any shell-script references.
+- **Server name renamed:** `sequential-thinking-server` → `rubber-ducky-thinking`.
+- **Web UI removed.** Use MCP Inspector or `curl` for manual testing.
+- **CORS default tightened.** Set `ALLOWED_ORIGINS` explicitly to allow browser clients.
 
-**When to use:**
-- Breaking down complex problems into steps
-- Planning and design with room for revision
-- Analysis that might need course correction
-- Problems where the full scope might not be clear initially
-- Multi-step solutions requiring context preservation
+## Development
 
-**Parameters:**
-- `thought` (string, required): Your current thinking step
-- `nextThoughtNeeded` (boolean, required): Whether another thought step is needed
-- `thoughtNumber` (integer, required): Current thought number
-- `totalThoughts` (integer, required): Estimated total thoughts needed
-- `isRevision` (boolean, optional): Whether this revises previous thinking
-- `revisesThought` (integer, optional): Which thought is being reconsidered
-- `branchFromThought` (integer, optional): Branching point thought number
-- `branchId` (string, optional): Branch identifier
-- `needsMoreThoughts` (boolean, optional): If more thoughts are needed
+```bash
+go test -race ./...
+go vet ./...
+gofmt -d .
+go build -ldflags "-X main.version=$(git describe --tags --always)" -o rubber-ducky-thinking .
+```
 
 ## License
 
-MIT
+MIT.

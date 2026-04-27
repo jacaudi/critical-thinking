@@ -1,17 +1,19 @@
-node_modules
-npm-debug.log
+# Source-tree artifacts not needed in the build context
 .git
-.gitignore
-README.md
-.env
-.nyc_output
-coverage
-.nyc_output
-*.md
 .github
+.worktrees
+docs
+.claude
+.private-journal
 .vscode
 .idea
-*.log
-*.lock
+
+# Build artifacts
+/rubber-ducky-mcp
+/rubber-ducky-thinking
+*.test
+*.out
+coverage.txt
+
+# OS
 .DS_Store
-Thumbs.db

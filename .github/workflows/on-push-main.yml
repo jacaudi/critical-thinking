@@ -6,10 +6,9 @@ on:
     branches:
       - main
     paths:
-      - '**/*.ts'
-      - '**/*.js'
-      - 'package.json'
-      - 'package-lock.json'
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/**'
       - '.github/actions/**'
       - 'Dockerfile*'

@@ -15,7 +15,7 @@ variable "SOURCE_COMMIT" {
 }
 
 variable "APP" {
-  default = "http-sequential-thinking"
+  default = "rubber-ducky-mcp"
 }
 
 variable "VERSION" {
@@ -23,7 +23,7 @@ variable "VERSION" {
 }
 
 variable "SOURCE" {
-  default = "https://github.com/jacaudi/http-sequential-thinking"
+  default = "https://github.com/jacaudi/rubber-ducky-mcp"
 }
 
 group "default" {
@@ -38,7 +38,7 @@ target "image" {
     "org.opencontainers.image.created" = "${BUILD_DATE}"
     "org.opencontainers.image.version" = "${VERSION}"
     "org.opencontainers.image.title" = "${APP}"
-    "org.opencontainers.image.description" = "MCP server for sequential thinking and problem solving"
+    "org.opencontainers.image.description" = "MCP server for critical, narrated, sequential thinking"
     "org.opencontainers.image.licenses" = "MIT"
   }
 }
@@ -62,7 +62,7 @@ target "image-automated" {
     "index:org.opencontainers.image.created=${BUILD_DATE}",
     "index:org.opencontainers.image.version=${VERSION}",
     "index:org.opencontainers.image.title=${APP}",
-    "index:org.opencontainers.image.description=MCP server for sequential thinking and problem solving",
+    "index:org.opencontainers.image.description=MCP server for critical, narrated, sequential thinking",
     "index:org.opencontainers.image.licenses=MIT"
   ]
 }
