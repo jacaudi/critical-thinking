@@ -68,6 +68,8 @@ This is the Go successor to `jacaudi/http-sequential-thinking`. Breaking changes
 - **Web UI removed.** Use MCP Inspector or `curl` for manual testing.
 - **CORS default tightened.** Set `ALLOWED_ORIGINS` explicitly to allow browser clients.
 - **Length caps on critical fields (server-side).** `critique` ≤ 280 chars, `counterArgument` ≤ 280, each `assumptions[i]` ≤ 200, `nextStepRationale` ≤ 200 (only enforced when `nextThoughtNeeded=true`). Caps are rune-counted and force one-sentence-per-field discipline; padded prose returns `IsError: true`.
+- **`thoughtNumber` and `totalThoughts` are now optional after the first thought.** Omit `thoughtNumber` to let the server auto-assign the next sequential position (trunk: history+1; branch: branch-depth, i.e. position within the branch — *not* a global ordinal). Omit `totalThoughts` to inherit the most recent *trunk* thought's value (branch thoughts don't contaminate the inheritance). The first trunk thought of a session must still include `totalThoughts`. Sending them explicitly is still accepted and overrides. If your client treats stored `thoughtNumber` on branch thoughts as a global ordinal, keep sending it explicitly.
+- **Response no longer echoes `thoughtNumber`, `totalThoughts`, or `nextThoughtNeeded`.** Callers already have these — the response now contains only `branches`, `thoughtHistoryLength`, `sessionConfidence`, and `branchConfidences` (when present). Read the full per-thought state from the `thinking://current` resource if you need it.
 
 ## Development
 

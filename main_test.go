@@ -231,10 +231,11 @@ func extractFirstJSON(body string) string {
 // defined here to avoid importing test-only helpers across packages.
 func validInputN(num int, sessionTag string) thinking.ThoughtData {
 	yes := true
+	tot := 20
 	return thinking.ThoughtData{
 		Thought:           sessionTag + " thought " + strconv.Itoa(num),
-		ThoughtNumber:     num,
-		TotalThoughts:     20,
+		ThoughtNumber:     &num,
+		TotalThoughts:     &tot,
 		NextThoughtNeeded: &yes,
 		Confidence:        0.5,
 		Assumptions:       []string{},

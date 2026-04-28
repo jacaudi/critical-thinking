@@ -28,6 +28,11 @@ How a session unfolds:
   - You start at thoughtNumber=1 with an estimated totalThoughts. Each call
     produces one thought + its critique. The next call builds on what came
     before — including, importantly, on what your own critique surfaced.
+  - thoughtNumber and totalThoughts are OPTIONAL after the first call: omit
+    thoughtNumber to let the server auto-assign the next sequential position;
+    omit totalThoughts to inherit the value from the prior thought. Send them
+    only when you need to override (revisions, branches, or a changed
+    estimate). The first thought of a session must include totalThoughts.
   - When a critique reveals that an earlier thought was wrong, use isRevision
     + revisesThought to revisit it. The new critique should explain *why*
     the old one was wrong.
@@ -35,8 +40,8 @@ How a session unfolds:
     branchFromThought + branchId together. Branches accumulate their own
     running confidence average — if a branch is averaging 0.4, that's a
     signal the path is shaky.
-  - Adjust totalThoughts as understanding evolves. Set nextThoughtNeeded=false
-    only when the work is genuinely done.
+  - Adjust totalThoughts as understanding evolves (resend it when changed).
+    Set nextThoughtNeeded=false only when the work is genuinely done.
 
 For each call, you write ONE thought as if explaining it to a patient listener.
 Then, in the same call, you provide:
@@ -88,7 +93,12 @@ What you get back:
   - A narrated transcript of this thought (rendered in rubber-duck voice).
   - Running session confidence (mean of trunk thoughts).
   - Per-branch confidence (if any branches exist).
-  - The full state needed to plan the next call.
+  - thoughtHistoryLength and the list of branch ids.
+
+The response deliberately does NOT echo thoughtNumber, totalThoughts, or
+nextThoughtNeeded — you sent those, you already have them. Track session
+position locally; the server is the source of truth via the
+thinking://current resource.
 
 Use this when the problem deserves slow, examined, multi-step thinking. Don't
 use it for trivia or one-step lookups — the ceremony will get in the way. Use

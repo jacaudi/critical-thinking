@@ -27,8 +27,8 @@ func TestNewServerStartsEmpty(t *testing.T) {
 func validInput(num int) ThoughtData {
 	return ThoughtData{
 		Thought:           "thought number " + strconv.Itoa(num),
-		ThoughtNumber:     num,
-		TotalThoughts:     3,
+		ThoughtNumber:     intPtr(num),
+		TotalThoughts:     intPtr(3),
 		NextThoughtNeeded: boolPtr(true),
 		Confidence:        0.5,
 		Assumptions:       []string{},
@@ -55,26 +55,171 @@ func TestProcessThoughtAppendsHistory(t *testing.T) {
 	if err := json.Unmarshal([]byte(res.StructuredJSON), &resp); err != nil {
 		t.Fatalf("unmarshal structured: %v", err)
 	}
-	if resp.ThoughtNumber != 1 {
-		t.Errorf("response.ThoughtNumber = %d, want 1", resp.ThoughtNumber)
-	}
 	if resp.ThoughtHistoryLength != 1 {
 		t.Errorf("response.ThoughtHistoryLength = %d, want 1", resp.ThoughtHistoryLength)
+	}
+	// The response no longer echoes thoughtNumber/totalThoughts/nextThoughtNeeded
+	// (caller already has them). Verify the value via the persisted history.
+	snap := s.Snapshot()
+	if got := *snap.Thoughts[0].ThoughtNumber; got != 1 {
+		t.Errorf("snapshot thoughtNumber = %d, want 1", got)
+	}
+}
+
+func TestProcessThoughtAutoAssignsThoughtNumber(t *testing.T) {
+	s := NewServer()
+	for i := 1; i <= 3; i++ {
+		td := validInput(i)
+		td.ThoughtNumber = nil // omit — server should fill in
+		if _, err := s.ProcessThought(td); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	snap := s.Snapshot()
+	if got := len(snap.Thoughts); got != 3 {
+		t.Fatalf("history length = %d, want 3", got)
+	}
+	for i, th := range snap.Thoughts {
+		if got := *th.ThoughtNumber; got != i+1 {
+			t.Errorf("thought %d auto-assigned %d, want %d", i, got, i+1)
+		}
+	}
+}
+
+func TestProcessThoughtInheritsTotalThoughts(t *testing.T) {
+	s := NewServer()
+	first := validInput(1)
+	first.TotalThoughts = intPtr(7)
+	if _, err := s.ProcessThought(first); err != nil {
+		t.Fatal(err)
+	}
+	second := validInput(2)
+	second.TotalThoughts = nil // omit — should inherit 7
+	if _, err := s.ProcessThought(second); err != nil {
+		t.Fatal(err)
+	}
+	snap := s.Snapshot()
+	if got := *snap.Thoughts[1].TotalThoughts; got != 7 {
+		t.Errorf("totalThoughts not inherited: got %d, want 7", got)
+	}
+}
+
+func TestProcessThoughtAutoAssignsBranchThoughtNumber(t *testing.T) {
+	s := NewServer()
+	if _, err := s.ProcessThought(validInput(1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ProcessThought(validInput(2)); err != nil {
+		t.Fatal(err)
+	}
+	// First branch thought, omitted thoughtNumber → expect within-branch depth = 1.
+	first := validInput(0)
+	first.ThoughtNumber = nil
+	first.BranchFromThought = intPtr(2)
+	first.BranchID = "alt"
+	if _, err := s.ProcessThought(first); err != nil {
+		t.Fatal(err)
+	}
+	// Second branch thought, also omitted → expect 2.
+	second := validInput(0)
+	second.ThoughtNumber = nil
+	second.BranchFromThought = intPtr(2)
+	second.BranchID = "alt"
+	if _, err := s.ProcessThought(second); err != nil {
+		t.Fatal(err)
+	}
+	snap := s.Snapshot()
+	got := snap.Branches["alt"]
+	if len(got) != 2 {
+		t.Fatalf("branch alt length = %d, want 2", len(got))
+	}
+	if n := *got[0].ThoughtNumber; n != 1 {
+		t.Errorf("first branch thought auto-assigned %d, want 1", n)
+	}
+	if n := *got[1].ThoughtNumber; n != 2 {
+		t.Errorf("second branch thought auto-assigned %d, want 2", n)
+	}
+}
+
+func TestProcessThoughtAutoAssignsRevisionThoughtNumber(t *testing.T) {
+	s := NewServer()
+	for i := 1; i <= 3; i++ {
+		if _, err := s.ProcessThought(validInput(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Revising thought 2; omit thoughtNumber → server fills in next trunk slot (4).
+	rev := validInput(0)
+	rev.ThoughtNumber = nil
+	rev.IsRevision = boolPtr(true)
+	rev.RevisesThought = intPtr(2)
+	if _, err := s.ProcessThought(rev); err != nil {
+		t.Fatal(err)
+	}
+	snap := s.Snapshot()
+	if got := *snap.Thoughts[3].ThoughtNumber; got != 4 {
+		t.Errorf("revision auto-assigned %d, want 4 (next trunk slot)", got)
+	}
+}
+
+func TestProcessThoughtInheritanceSkipsBranchThoughts(t *testing.T) {
+	// Regression: inheritance must walk back to the last *trunk* thought, not
+	// the most recent thought of any kind. A branch thought with an
+	// auto-bumped TotalThoughts should not contaminate the trunk's value.
+	s := NewServer()
+	first := validInput(1)
+	first.TotalThoughts = intPtr(5)
+	if _, err := s.ProcessThought(first); err != nil {
+		t.Fatal(err)
+	}
+	// Branch thought with explicit thoughtNumber > totalThoughts → server
+	// auto-bumps the stored TotalThoughts on the branch thought to 99.
+	branch := validInput(99)
+	branch.TotalThoughts = intPtr(5)
+	branch.BranchFromThought = intPtr(1)
+	branch.BranchID = "alt"
+	if _, err := s.ProcessThought(branch); err != nil {
+		t.Fatal(err)
+	}
+	// Resume trunk with omitted totalThoughts → must inherit 5 (from the
+	// last trunk thought), NOT 99 (from the branch thought).
+	resume := validInput(2)
+	resume.TotalThoughts = nil
+	if _, err := s.ProcessThought(resume); err != nil {
+		t.Fatal(err)
+	}
+	snap := s.Snapshot()
+	if got := *snap.Thoughts[2].TotalThoughts; got != 5 {
+		t.Errorf("inheritance contaminated by branch: got %d, want 5", got)
+	}
+}
+
+func TestProcessThoughtFirstThoughtRequiresTotalThoughts(t *testing.T) {
+	s := NewServer()
+	td := validInput(1)
+	td.TotalThoughts = nil // omit on first call — must error
+	res, err := s.ProcessThought(td)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError {
+		t.Error("expected IsError=true when totalThoughts is omitted on first thought")
+	}
+	if got := s.HistoryLength(); got != 0 {
+		t.Errorf("first-thought failure should not mutate state, HistoryLength=%d", got)
 	}
 }
 
 func TestProcessThoughtAutoBumpsTotalThoughts(t *testing.T) {
 	s := NewServer()
 	td := validInput(5)
-	td.TotalThoughts = 3 // less than ThoughtNumber
-	res, err := s.ProcessThought(td)
-	if err != nil {
+	td.TotalThoughts = intPtr(3) // less than ThoughtNumber
+	if _, err := s.ProcessThought(td); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	var resp ThoughtResponse
-	_ = json.Unmarshal([]byte(res.StructuredJSON), &resp)
-	if resp.TotalThoughts != 5 {
-		t.Errorf("totalThoughts not auto-bumped: got %d, want 5", resp.TotalThoughts)
+	snap := s.Snapshot()
+	if got := *snap.Thoughts[0].TotalThoughts; got != 5 {
+		t.Errorf("totalThoughts not auto-bumped: got %d, want 5", got)
 	}
 }
 
@@ -327,7 +472,7 @@ func TestProcessThoughtConcurrent(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < perGoroutine; i++ {
 				td := validInput(gID*perGoroutine + i + 1)
-				td.TotalThoughts = goroutines * perGoroutine
+				td.TotalThoughts = intPtr(goroutines * perGoroutine)
 				if _, err := s.ProcessThought(td); err != nil {
 					t.Errorf("goroutine %d iter %d: %v", gID, i, err)
 					return

@@ -2,6 +2,7 @@ package thinking
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -96,8 +97,42 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 			*td.BranchFromThought, len(s.thoughtHistory))), nil
 	}
 
-	if td.ThoughtNumber > td.TotalThoughts {
-		td.TotalThoughts = td.ThoughtNumber
+	// Auto-assign ThoughtNumber when omitted: branch thoughts get the next
+	// position within their branch; everything else gets the next trunk slot.
+	if td.ThoughtNumber == nil {
+		var n int
+		if td.BranchFromThought != nil && td.BranchID != "" {
+			n = len(s.branches[td.BranchID]) + 1
+		} else {
+			n = len(s.thoughtHistory) + 1
+		}
+		td.ThoughtNumber = &n
+	}
+
+	// Inherit TotalThoughts from the most recent trunk thought when omitted.
+	// Walking the log backwards filters out branch thoughts so the trunk's
+	// running total isn't contaminated by a branch's auto-bumped value.
+	// First call (no trunk thoughts yet) must send it explicitly — there is
+	// nothing to inherit.
+	if td.TotalThoughts == nil {
+		var inherited *int
+		for i := len(s.thoughtHistory) - 1; i >= 0; i-- {
+			h := s.thoughtHistory[i]
+			if h.BranchFromThought == nil && h.BranchID == "" {
+				inherited = h.TotalThoughts
+				break
+			}
+		}
+		if inherited == nil {
+			return errorResult(errors.New("totalThoughts is required on the first trunk thought of a session (no prior trunk value to inherit)")), nil
+		}
+		v := *inherited
+		td.TotalThoughts = &v
+	}
+
+	if *td.ThoughtNumber > *td.TotalThoughts {
+		v := *td.ThoughtNumber
+		td.TotalThoughts = &v
 	}
 
 	s.thoughtHistory = append(s.thoughtHistory, td)
@@ -130,9 +165,6 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 	}
 
 	resp := ThoughtResponse{
-		ThoughtNumber:        td.ThoughtNumber,
-		TotalThoughts:        td.TotalThoughts,
-		NextThoughtNeeded:    *td.NextThoughtNeeded,
 		Branches:             sortedKeys(s.branches),
 		ThoughtHistoryLength: len(s.thoughtHistory),
 		SessionConfidence:    sessionConf,
@@ -192,7 +224,7 @@ func (s *SequentialThinkingServer) headerLineLocked(td ThoughtData) string {
 	switch {
 	case td.IsRevision != nil && *td.IsRevision && td.RevisesThought != nil:
 		return fmt.Sprintf("Revision of thought %d (now thought %d) · confidence %.2f",
-			*td.RevisesThought, td.ThoughtNumber, td.Confidence)
+			*td.RevisesThought, *td.ThoughtNumber, td.Confidence)
 	case td.BranchFromThought != nil && td.BranchID != "":
 		// First-in-branch vs subsequent: count the current branch's depth.
 		// At this point the new thought has already been appended to s.branches[BranchID].
@@ -202,10 +234,10 @@ func (s *SequentialThinkingServer) headerLineLocked(td ThoughtData) string {
 				td.BranchID, *td.BranchFromThought, td.Confidence)
 		}
 		return fmt.Sprintf("Branch '%s' · thought %d · confidence %.2f",
-			td.BranchID, td.ThoughtNumber, td.Confidence)
+			td.BranchID, *td.ThoughtNumber, td.Confidence)
 	default:
 		return fmt.Sprintf("Thought %d of %d · confidence %.2f",
-			td.ThoughtNumber, td.TotalThoughts, td.Confidence)
+			*td.ThoughtNumber, *td.TotalThoughts, td.Confidence)
 	}
 }
 

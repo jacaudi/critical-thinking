@@ -10,8 +10,8 @@ func TestThoughtDataJSONRoundTrip(t *testing.T) {
 	yes := true
 	td := ThoughtData{
 		Thought:           "I think we should normalize first",
-		ThoughtNumber:     1,
-		TotalThoughts:     3,
+		ThoughtNumber:     intPtr(1),
+		TotalThoughts:     intPtr(3),
 		NextThoughtNeeded: &yes,
 		Confidence:        0.6,
 		Assumptions:       []string{"row count is current"},
@@ -40,9 +40,6 @@ func TestThoughtDataJSONRoundTrip(t *testing.T) {
 
 func TestThoughtResponseJSONShape(t *testing.T) {
 	resp := ThoughtResponse{
-		ThoughtNumber:        1,
-		TotalThoughts:        3,
-		NextThoughtNeeded:    true,
 		Branches:             []string{},
 		ThoughtHistoryLength: 1,
 		SessionConfidence:    0.6,
@@ -58,9 +55,14 @@ func TestThoughtResponseJSONShape(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	for _, key := range []string{"thoughtNumber", "totalThoughts", "nextThoughtNeeded", "branches", "thoughtHistoryLength", "sessionConfidence"} {
+	for _, key := range []string{"branches", "thoughtHistoryLength", "sessionConfidence"} {
 		if _, ok := got[key]; !ok {
 			t.Errorf("missing key: %s", key)
+		}
+	}
+	for _, key := range []string{"thoughtNumber", "totalThoughts", "nextThoughtNeeded"} {
+		if _, ok := got[key]; ok {
+			t.Errorf("response should not echo %s (caller already has it)", key)
 		}
 	}
 	if _, ok := got["branchConfidences"]; ok {
@@ -76,8 +78,8 @@ func intPtr(i int) *int    { return &i }
 func validBase() ThoughtData {
 	return ThoughtData{
 		Thought:           "a thought",
-		ThoughtNumber:     1,
-		TotalThoughts:     1,
+		ThoughtNumber:     intPtr(1),
+		TotalThoughts:     intPtr(1),
 		NextThoughtNeeded: boolPtr(false),
 		Confidence:        0.5,
 		Assumptions:       []string{},
@@ -93,9 +95,9 @@ func TestValidateRequiredFields(t *testing.T) {
 		wantErr string
 	}{
 		{"empty thought", func(td *ThoughtData) { td.Thought = "" }, "thought must be a non-empty string"},
-		{"zero thoughtNumber", func(td *ThoughtData) { td.ThoughtNumber = 0 }, "thoughtNumber must be ≥ 1"},
-		{"negative thoughtNumber", func(td *ThoughtData) { td.ThoughtNumber = -1 }, "thoughtNumber must be ≥ 1"},
-		{"zero totalThoughts", func(td *ThoughtData) { td.TotalThoughts = 0 }, "totalThoughts must be ≥ 1"},
+		{"zero thoughtNumber", func(td *ThoughtData) { td.ThoughtNumber = intPtr(0) }, "thoughtNumber must be ≥ 1"},
+		{"negative thoughtNumber", func(td *ThoughtData) { td.ThoughtNumber = intPtr(-1) }, "thoughtNumber must be ≥ 1"},
+		{"zero totalThoughts", func(td *ThoughtData) { td.TotalThoughts = intPtr(0) }, "totalThoughts must be ≥ 1"},
 		{"missing nextThoughtNeeded", func(td *ThoughtData) { td.NextThoughtNeeded = nil }, "nextThoughtNeeded must be present"},
 		{"empty critique", func(td *ThoughtData) { td.Critique = "" }, "critique must be a non-empty string"},
 		{"empty counterArgument", func(td *ThoughtData) { td.CounterArgument = "" }, "counterArgument must be a non-empty string"},

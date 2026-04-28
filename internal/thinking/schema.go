@@ -22,12 +22,14 @@ const (
 // ThoughtData is the input to one criticalthinking tool call.
 //
 // Sent fields whose omission cannot be distinguished from their zero value
-// (NextThoughtNeeded, IsRevision, RevisesThought, BranchFromThought,
-// NeedsMoreThoughts) use pointer types so the validator can detect "not sent".
+// (ThoughtNumber, TotalThoughts, NextThoughtNeeded, IsRevision, RevisesThought,
+// BranchFromThought, NeedsMoreThoughts) use pointer types so the validator can
+// detect "not sent". For ThoughtNumber/TotalThoughts, "not sent" is a signal
+// for server-side auto-assign (next sequential / inherit prior).
 type ThoughtData struct {
 	Thought           string `json:"thought"`
-	ThoughtNumber     int    `json:"thoughtNumber"`
-	TotalThoughts     int    `json:"totalThoughts"`
+	ThoughtNumber     *int   `json:"thoughtNumber,omitempty"`
+	TotalThoughts     *int   `json:"totalThoughts,omitempty"`
 	NextThoughtNeeded *bool  `json:"nextThoughtNeeded"`
 	IsRevision        *bool  `json:"isRevision,omitempty"`
 	RevisesThought    *int   `json:"revisesThought,omitempty"`
@@ -43,10 +45,12 @@ type ThoughtData struct {
 }
 
 // ThoughtResponse is the structuredContent of a criticalthinking tool call.
+//
+// Echo fields the caller already sent (thoughtNumber, totalThoughts,
+// nextThoughtNeeded) are deliberately omitted to save tokens. The server
+// tracks them internally; callers can read them back from the
+// thinking://current resource if needed.
 type ThoughtResponse struct {
-	ThoughtNumber        int                `json:"thoughtNumber"`
-	TotalThoughts        int                `json:"totalThoughts"`
-	NextThoughtNeeded    bool               `json:"nextThoughtNeeded"`
 	Branches             []string           `json:"branches"`
 	ThoughtHistoryLength int                `json:"thoughtHistoryLength"`
 	SessionConfidence    float64            `json:"sessionConfidence"`
@@ -63,11 +67,11 @@ func (td ThoughtData) Validate() error {
 	if td.Thought == "" {
 		return errors.New("thought must be a non-empty string")
 	}
-	if td.ThoughtNumber < 1 {
-		return errors.New("thoughtNumber must be ≥ 1")
+	if td.ThoughtNumber != nil && *td.ThoughtNumber < 1 {
+		return errors.New("thoughtNumber must be ≥ 1 (omit to auto-assign)")
 	}
-	if td.TotalThoughts < 1 {
-		return errors.New("totalThoughts must be ≥ 1")
+	if td.TotalThoughts != nil && *td.TotalThoughts < 1 {
+		return errors.New("totalThoughts must be ≥ 1 (omit to inherit prior)")
 	}
 	if td.NextThoughtNeeded == nil {
 		return errors.New("nextThoughtNeeded must be present (true or false)")
