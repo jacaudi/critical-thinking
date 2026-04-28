@@ -23,25 +23,11 @@ you talk to while you think one step at a time. This tool fuses three discipline
 Sequential thinking is the *spine*. Rubber-ducking is the *voice*. Critical
 self-examination is the *check*. Skipping any one of them is a misuse.
 
-How a session unfolds:
-
-  - You start at thoughtNumber=1 with an estimated totalThoughts. Each call
-    produces one thought + its critique. The next call builds on what came
-    before — including, importantly, on what your own critique surfaced.
-  - thoughtNumber and totalThoughts are OPTIONAL after the first call: omit
-    thoughtNumber to let the server auto-assign the next sequential position;
-    omit totalThoughts to inherit the value from the prior thought. Send them
-    only when you need to override (revisions, branches, or a changed
-    estimate). The first thought of a session must include totalThoughts.
-  - When a critique reveals that an earlier thought was wrong, use isRevision
-    + revisesThought to revisit it. The new critique should explain *why*
-    the old one was wrong.
-  - When the path forks and you want to explore an alternative, use
-    branchFromThought + branchId together. Branches accumulate their own
-    running confidence average — if a branch is averaging 0.4, that's a
-    signal the path is shaky.
-  - Adjust totalThoughts as understanding evolves (resend it when changed).
-    Set nextThoughtNeeded=false only when the work is genuinely done.
+How a session unfolds: each call produces one thought + its critique. The
+next call builds on everything that came before — including, importantly, on
+what your own prior critique surfaced. Sequential is not just numbering; it
+means each thought *uses* what came before. See "Structural fields" below
+for the mechanics (revisions, branches, position, totals).
 
 For each call, you write ONE thought as if explaining it to a patient listener.
 Then, in the same call, you provide:
@@ -69,6 +55,57 @@ Then, in the same call, you provide:
 Brevity discipline: 'thought' is your narration; the critical fields are
 bullets, not paragraphs. One tight sentence each, enforced server-side. A
 specific weakness in 20 words beats vague self-doubt in 200.
+
+Structural fields (control how this call relates to prior thoughts):
+
+  - thoughtNumber (int, optional): Current position. Omit to let the server
+                            auto-assign (trunk: history+1; branch: depth within
+                            the branch). Send explicitly when you want to be
+                            unambiguous, e.g. on revisions.
+  - totalThoughts (int, required on the first trunk thought, optional after):
+                            Your current estimate of how many thoughts you'll
+                            need. Resend when revised; omit to inherit the prior
+                            trunk thought's value. Adjust up if you realize more
+                            is needed — the server auto-bumps if your
+                            thoughtNumber exceeds totalThoughts.
+  - nextThoughtNeeded (bool, required): true if you need another thought, even
+                            when you thought you were done. Set false only when
+                            you have a satisfactory answer.
+  - isRevision (bool) + revisesThought (int): Use together when this thought
+                            revises an earlier one. The critique on the revising
+                            thought should explain *why* the previous thinking
+                            was wrong — not just restate the new view.
+  - branchFromThought (int) + branchId (string): Use together to fork into an
+                            alternative path from a specific prior thought.
+                            Branches accumulate their own running confidence
+                            average; a branch averaging low confidence is a
+                            signal the path is shaky.
+  - needsMoreThoughts (bool, optional): Set true when you reach the end of your
+                            estimate but realize more thinking is needed. This
+                            is a self-signal — it doesn't itself extend the
+                            session; raise totalThoughts to do that.
+
+When to use this tool:
+  - Breaking complex problems into ordered, examined steps
+  - Multi-step solutions that need to maintain context across calls
+  - Analysis that may need course correction as understanding deepens
+  - Problems where the full scope isn't clear at the start
+  - Decisions where being wrong is expensive
+  - Situations where filtering irrelevant context matters
+
+Process guidance:
+  1. Start with an initial totalThoughts estimate; be ready to adjust.
+  2. Question and revise previous thoughts when your critique surfaces a flaw
+     (isRevision + revisesThought).
+  3. Add more thoughts past the estimate when needed (set needsMoreThoughts and
+     raise totalThoughts).
+  4. Express uncertainty honestly via confidence, assumptions, and critique.
+  5. Branch when paths diverge (branchFromThought + branchId); don't conflate
+     alternatives onto the trunk.
+  6. Generate a hypothesis, then verify it across subsequent thoughts.
+  7. Filter irrelevant information — not every prior detail matters at every
+     step.
+  8. Set nextThoughtNeeded=false only when you have a satisfactory answer.
 
 Voice and register for the thought field:
   - First-person, narrative, exploratory. "I think... but wait... actually..."
