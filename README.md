@@ -1,82 +1,97 @@
 # Rubber Ducky MCP
 
-A Model Context Protocol server for **critical, narrated, sequential thinking**. A rubber duck you talk to while you think, one step at a time, with required confidence calibration and adversarial self-critique on every thought.
+A Model Context Protocol server for **critical, narrated, sequential thinking**. A rubber duck you talk to while you think — one step at a time — with required confidence calibration and adversarial self-critique on every thought.
 
-This server fuses three disciplines:
+It fuses three disciplines:
 
 1. **Sequential thinking** — break problems into ordered, numbered steps; revise; branch.
 2. **Rubber-duck narration** — explain each thought out loud, in first-person, to an imagined listener.
 3. **Critical self-examination** — every thought is paired with confidence, assumptions, critique, and a counter-argument.
 
-The single tool is `criticalthinking`. Every call must include the critical-thinking fields — there is no opt-out, by design. See the tool description for the full contract.
+The single tool is `criticalthinking`. Every call must include the four critical-thinking fields — there is no opt-out, by design.
 
 ## Install
 
-### Go
-
 ```bash
 go install github.com/jacaudi/rubber-ducky-mcp@latest
-# binary lands at $GOPATH/bin/rubber-ducky-mcp
+# or
+docker pull ghcr.io/jacaudi/rubber-ducky-mcp:latest
 ```
 
-### Docker
-
-```bash
-docker run --rm -p 3000:3000 ghcr.io/jacaudi/rubber-ducky-mcp:latest
-```
+The Go install lands the binary at `$GOPATH/bin/rubber-ducky-mcp`.
 
 ## Run
 
-### Stdio (default)
-
 ```bash
-rubber-ducky-thinking
+# stdio (default; for Claude Desktop, Codex CLI, VS Code, etc.)
+rubber-ducky-mcp
+
+# Streamable HTTP
+rubber-ducky-mcp -http :3000
+
+# Docker (HTTP on :3000)
+docker run --rm -p 3000:3000 ghcr.io/jacaudi/rubber-ducky-mcp:latest
 ```
 
-Use this for direct integration with MCP hosts (Claude Desktop, Codex CLI, VS Code).
+## One-call example
 
-### Streamable HTTP
+Request:
 
-```bash
-rubber-ducky-thinking -http :3000
+```json
+{
+  "thought": "I think we should normalize first because reads dominate writes.",
+  "thoughtNumber": 1, "totalThoughts": 3, "nextThoughtNeeded": true,
+  "confidence": 0.6,
+  "assumptions": ["read:write ratio is ~10:1"],
+  "critique": "Drifted into solution mode without confirming the ratio.",
+  "counterArgument": "If writes dominate, monolith-first is simpler.",
+  "nextStepRationale": "Verify the read:write ratio before committing to normalization."
+}
 ```
 
-Endpoints:
+Response (`structuredContent`):
 
-- `POST/GET/DELETE /mcp` — main MCP endpoint.
-- `GET /health` — `{status, transport, sessionsCreated, version}`. `sessionsCreated` is a lifetime counter of sessions ever created in this process; it is NOT pruned when the SDK closes idle sessions.
-
-## Configuration
-
-| Env var | Default | Purpose |
-|---|---|---|
-| `ALLOWED_ORIGINS` | (empty) | Comma-separated list of browser origins permitted to call `/mcp`. Wired into both the outer CORS layer and the SDK's CSRF protection (`http.CrossOriginProtection.AddTrustedOrigin`). Default rejects all browser origins. Non-browser callers (no `Origin` / no `Sec-Fetch-Site` header) are unaffected. |
-| `DOCKER` | unset | When `true`, HTTP server binds to `0.0.0.0` instead of `127.0.0.1`. Set automatically in the published Docker image. |
-| `DISABLE_THOUGHT_LOGGING` | unset | Reserved for the future structured-log gate. The current server emits no per-thought logs by default. |
-
-Sessions are in-memory only; idle sessions expire after 1 hour (enforced by the SDK via `StreamableHTTPOptions.SessionTimeout`).
-
-## Migrating from `http-sequential-thinking`
-
-This is the Go successor to `jacaudi/http-sequential-thinking`. Breaking changes:
-
-- **Tool renamed:** `sequentialthinking` → `criticalthinking`. Update `mcp.json` references.
-- **Required new fields:** every call must send `confidence`, `assumptions`, `critique`, `counterArgument`. Calls missing these fail with `IsError: true`.
-- **`nextStepRationale` required when `nextThoughtNeeded: true`.**
-- **Binary renamed:** `http-sequential-thinking` → `rubber-ducky-thinking`. Update `mcp.json` `command` fields and any shell-script references.
-- **Server name renamed:** `sequential-thinking-server` → `rubber-ducky-thinking`.
-- **Web UI removed.** Use MCP Inspector or `curl` for manual testing.
-- **CORS default tightened.** Set `ALLOWED_ORIGINS` explicitly to allow browser clients.
-
-## Development
-
-```bash
-go test -race ./...
-go vet ./...
-gofmt -d .
-go build -ldflags "-X main.version=$(git describe --tags --always)" -o rubber-ducky-thinking .
+```json
+{ "branches": [], "thoughtHistoryLength": 1, "sessionConfidence": 0.6 }
 ```
+
+The `text` content is a rendered transcript in rubber-duck voice. Subsequent calls can omit `thoughtNumber` (auto-assigned) and `totalThoughts` (inherited). Every critical-thinking field has a server-side length cap to enforce one-tight-sentence discipline. The full contract lives in the tool description itself.
+
+## Client setup
+
+`mcp.json` (Claude Desktop / Codex CLI / VS Code):
+
+```json
+{
+  "mcpServers": {
+    "rubber-ducky": { "command": "rubber-ducky-mcp" }
+  }
+}
+```
+
+Or HTTP:
+
+```json
+{
+  "mcpServers": {
+    "rubber-ducky": { "url": "http://localhost:3000/mcp" }
+  }
+}
+```
+
+More client recipes in [docs/clients.md](docs/clients.md).
+
+## Resources
+
+The server exposes `thinking://current` — a per-session JSON snapshot of the full thought history (trunk + branches, all critical-thinking fields preserved).
+
+## Documentation
+
+- [docs/configuration.md](docs/configuration.md) — env vars, HTTP endpoints, session lifecycle
+- [docs/clients.md](docs/clients.md) — Claude Desktop, Codex CLI, VS Code, Cursor recipes
+- [docs/development.md](docs/development.md) — building, testing, debugging with MCP Inspector
+- [docs/migration.md](docs/migration.md) — breaking changes since `http-sequential-thinking`
 
 ## License
 
-MIT.
+[MIT](LICENSE).

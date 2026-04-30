@@ -118,7 +118,7 @@ func runHTTP(addr string) {
 		}
 	}()
 
-	log.Printf("rubber-ducky-thinking %s listening on http://%s", version, listenAddr)
+	log.Printf("rubber-ducky-mcp %s listening on http://%s", version, listenAddr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("listen: %v", err)
 	}
@@ -131,7 +131,7 @@ func runHTTP(addr string) {
 // state). Stdio mode calls it once with a single global state.
 func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
-		Name:    "rubber-ducky-thinking",
+		Name:    "rubber-ducky-mcp",
 		Version: version,
 	}, nil)
 
