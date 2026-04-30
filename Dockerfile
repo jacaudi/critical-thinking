@@ -18,12 +18,12 @@ COPY . .
 RUN CGO_ENABLED=0 go build \
     -trimpath \
     -ldflags "-s -w -X main.version=${VERSION}" \
-    -o /out/rubber-ducky-thinking .
+    -o /out/rubber-ducky-mcp .
 
 # ---- final ----
 FROM gcr.io/distroless/static-debian12:nonroot AS release
 
-COPY --from=builder /out/rubber-ducky-thinking /rubber-ducky-thinking
+COPY --from=builder /out/rubber-ducky-mcp /rubber-ducky-mcp
 
 LABEL org.opencontainers.image.title="Rubber Ducky MCP"
 LABEL org.opencontainers.image.description="MCP server for critical, narrated, sequential thinking"
@@ -39,5 +39,5 @@ EXPOSE 3000
 # /health from the network. No HEALTHCHECK directive in the image.
 
 USER nonroot:nonroot
-ENTRYPOINT ["/rubber-ducky-thinking"]
+ENTRYPOINT ["/rubber-ducky-mcp"]
 CMD ["-http", ":3000"]
