@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/jacaudi/critical-thinking-mcp/compare/v1.2.1...v1.3.0) (2026-05-08)
+
+* refactor!: rename repo and module path from critical-thinking-plugin to critical-thinking-mcp ([#41](https://github.com/jacaudi/critical-thinking-mcp/issues/41)) ([2b0e040](https://github.com/jacaudi/critical-thinking-mcp/commit/2b0e0400f36f7a0dbe019238b43a4005450b7c2a))
+
+
+### BREAKING CHANGES
+
+* external consumers of `internal/thinking` (if any) must
+update their import paths to github.com/jacaudi/critical-thinking-mcp.
+
+Co-authored-by: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
 ## [1.2.1](https://github.com/jacaudi/critical-thinking-plugin/compare/v1.2.0...v1.2.1) (2026-05-08)
 
 ### Bug Fixes
