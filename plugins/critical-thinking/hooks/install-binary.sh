@@ -1,10 +1,22 @@
 #!/usr/bin/env bash
-# Download the critical-thinking MCP server binary from the latest GitHub
+# Download the critical-thinking MCP server binary from a pinned GitHub
 # Release for the current platform and stash it under ${CLAUDE_PLUGIN_ROOT}/bin/
 # so the plugin's .mcp.json can launch it without a Go toolchain on the host.
 #
-# Idempotent: re-runs are no-ops once the binary is in place. Re-download by
-# deleting ${CLAUDE_PLUGIN_ROOT}/bin/critical-thinking.
+# Update model: this script is the source of truth for which binary version
+# the plugin expects. semantic-release bumps EXPECTED_VERSION on every
+# release (see .releaserc.json prepareCmd), and the marketplace ships the
+# updated script. When the user runs `claude plugin update`, the new script
+# arrives, the EXPECTED_VERSION mismatch fires, and the binary gets refreshed
+# on next session start. No runtime API calls, no TTL guessing.
+#
+# Behavior:
+#   - Binary present AND .installed-version matches EXPECTED_VERSION → no-op.
+#   - Otherwise → download EXPECTED_VERSION's archive, install, record version.
+#   - Download fails AND a binary already exists → keep existing, warn, exit 0.
+#   - Download fails AND no binary exists → fail loudly.
+#
+# Force re-download: delete ${CLAUDE_PLUGIN_ROOT}/bin/critical-thinking.
 #
 # Windows note: requires Git Bash, WSL, or another POSIX shell environment.
 
@@ -13,12 +25,21 @@ set -euo pipefail
 REPO="jacaudi/critical-thinking-plugin"
 PROJECT="critical-thinking"
 
+# DO NOT EDIT BY HAND. Auto-bumped on every release by semantic-release
+# (see .releaserc.json `@semantic-release/exec` prepareCmd).
+EXPECTED_VERSION="v1.1.0"
+
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")")"/.. && pwd)}"
 BIN_DIR="${PLUGIN_ROOT}/bin"
 BIN_PATH="${BIN_DIR}/${PROJECT}"
+INSTALLED_VERSION_FILE="${BIN_DIR}/.installed-version"
 
-if [[ -x "${BIN_PATH}" ]]; then
-  exit 0
+# Fast path: binary present and at the expected version.
+if [[ -x "${BIN_PATH}" && -f "${INSTALLED_VERSION_FILE}" ]]; then
+  installed_tag=$(cat "${INSTALLED_VERSION_FILE}" 2>/dev/null || echo "")
+  if [[ "${installed_tag}" == "${EXPECTED_VERSION}" ]]; then
+    exit 0
+  fi
 fi
 
 case "$(uname -s)" in
@@ -40,37 +61,37 @@ case "$(uname -m)" in
     ;;
 esac
 
-# Resolve latest release tag (no jq dependency).
-LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-  | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
-
-if [[ -z "${LATEST_TAG}" ]]; then
-  echo "critical-thinking: could not resolve latest release tag from https://api.github.com/repos/${REPO}/releases/latest" >&2
-  echo "critical-thinking: ensure a release exists, or install the binary manually and put it on PATH." >&2
-  exit 1
-fi
-
-VERSION="${LATEST_TAG#v}"
-
+VERSION="${EXPECTED_VERSION#v}"
 EXT="tar.gz"
 [[ "${OS}" == "windows" ]] && EXT="zip"
+URL="https://github.com/${REPO}/releases/download/${EXPECTED_VERSION}/${PROJECT}_${VERSION}_${OS}_${ARCH}.${EXT}"
 
-URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${PROJECT}_${VERSION}_${OS}_${ARCH}.${EXT}"
-
-echo "critical-thinking: downloading ${URL}" >&2
+echo "critical-thinking: installing ${EXPECTED_VERSION} from ${URL}" >&2
 
 mkdir -p "${BIN_DIR}"
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
 
+download_ok=1
 if [[ "${EXT}" == "tar.gz" ]]; then
-  curl -fsSL "${URL}" | tar -xzC "${TMPDIR}"
+  curl -fsSL "${URL}" | tar -xzC "${TMPDIR}" || download_ok=0
 else
-  curl -fsSL -o "${TMPDIR}/release.zip" "${URL}"
-  unzip -q "${TMPDIR}/release.zip" -d "${TMPDIR}"
+  curl -fsSL -o "${TMPDIR}/release.zip" "${URL}" || download_ok=0
+  if [[ "${download_ok}" == "1" ]]; then
+    unzip -q "${TMPDIR}/release.zip" -d "${TMPDIR}" || download_ok=0
+  fi
 fi
 
-# Goreleaser archives place the binary at the archive root.
+# Download failure: tolerate it if we already have *some* binary; otherwise fail.
+if [[ "${download_ok}" == "0" ]]; then
+  if [[ -x "${BIN_PATH}" ]]; then
+    echo "critical-thinking: download failed; keeping existing binary at ${BIN_PATH}" >&2
+    exit 0
+  fi
+  echo "critical-thinking: download failed and no existing binary — check network or install manually" >&2
+  exit 1
+fi
+
 SRC="${TMPDIR}/${PROJECT}"
 [[ "${OS}" == "windows" ]] && SRC="${TMPDIR}/${PROJECT}.exe"
 
@@ -81,5 +102,6 @@ fi
 
 mv "${SRC}" "${BIN_PATH}"
 chmod +x "${BIN_PATH}"
+printf '%s\n' "${EXPECTED_VERSION}" > "${INSTALLED_VERSION_FILE}"
 
-echo "critical-thinking: installed ${BIN_PATH} (release ${LATEST_TAG})" >&2
+echo "critical-thinking: installed ${BIN_PATH} (${EXPECTED_VERSION})" >&2

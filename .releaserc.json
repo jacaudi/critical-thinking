@@ -35,10 +35,11 @@
       "changelogTitle": "# Changelog"
     }],
     ["@semantic-release/exec", {
+      "prepareCmd": "sed -i.bak 's|^EXPECTED_VERSION=.*|EXPECTED_VERSION=\"v${nextRelease.version}\"|' plugins/critical-thinking/hooks/install-binary.sh && rm plugins/critical-thinking/hooks/install-binary.sh.bak",
       "publishCmd": "goreleaser release --clean --skip=validate"
     }],
     ["@semantic-release/git", {
-      "assets": ["CHANGELOG.md"],
+      "assets": ["CHANGELOG.md", "plugins/critical-thinking/hooks/install-binary.sh"],
       "message": "release: v${nextRelease.version} [skip ci]"
     }],
     ["@semantic-release/github", {
