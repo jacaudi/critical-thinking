@@ -1,4 +1,4 @@
-module github.com/jacaudi/rubber-ducky-mcp
+module github.com/jacaudi/critical-thinking-plugin
 
 go 1.26
 

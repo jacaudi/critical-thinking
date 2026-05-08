@@ -35,7 +35,7 @@ runs:
       id: meta
       uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5
       with:
-        images: ghcr.io/${{ github.repository }}
+        images: ghcr.io/${{ github.repository_owner }}/critical-thinking
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -48,7 +48,7 @@ runs:
       uses: docker/bake-action@3acf805d94d93a86cce4ca44798a76464a75b88c # v6
       env:
         BUILD_DATE: ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-        REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+        REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/critical-thinking
         SOURCE_COMMIT: ${{ github.sha }}
         VERSION: ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
       with:

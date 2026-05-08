@@ -15,7 +15,7 @@ variable "SOURCE_COMMIT" {
 }
 
 variable "APP" {
-  default = "rubber-ducky-mcp"
+  default = "critical-thinking"
 }
 
 variable "VERSION" {
@@ -23,7 +23,7 @@ variable "VERSION" {
 }
 
 variable "SOURCE" {
-  default = "https://github.com/jacaudi/rubber-ducky-mcp"
+  default = "https://github.com/jacaudi/critical-thinking-plugin"
 }
 
 group "default" {

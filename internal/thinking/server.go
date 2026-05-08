@@ -69,7 +69,7 @@ func (s *SequentialThinkingServer) LastAccessed() time.Time {
 // adapts it into a *mcp.CallToolResult — keeping mcp imports out of this
 // package preserves its testability.
 type ToolResult struct {
-	Text           string // the rubber-duck transcript (or error JSON when IsError)
+	Text           string // the thinking-out-loud transcript (or error JSON when IsError)
 	StructuredJSON string // JSON-encoded ThoughtResponse, "" when IsError
 	IsError        bool
 }
@@ -152,7 +152,7 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 	}, nil
 }
 
-// renderTranscriptLocked builds the rubber-duck transcript text for one thought.
+// renderTranscriptLocked builds the narrated transcript text for one thought.
 // Caller must hold s.mu.
 func (s *SequentialThinkingServer) renderTranscriptLocked(td ThoughtData, sessionConf float64) string {
 	var b strings.Builder

@@ -1,6 +1,6 @@
 # Documentation
 
-Reference material for `rubber-ducky-mcp`. The top-level [README](../README.md) is the landing page; everything below is detail.
+Reference material for `critical-thinking`. The top-level [README](../README.md) is the landing page; everything below is detail.
 
 | File | Covers |
 |---|---|

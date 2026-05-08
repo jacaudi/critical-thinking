@@ -18,19 +18,19 @@ COPY . .
 RUN CGO_ENABLED=0 go build \
     -trimpath \
     -ldflags "-s -w -X main.version=${VERSION}" \
-    -o /out/rubber-ducky-mcp .
+    -o /out/critical-thinking ./cmd/critical-thinking
 
 # ---- final ----
 FROM gcr.io/distroless/static-debian12:nonroot AS release
 
-COPY --from=builder /out/rubber-ducky-mcp /rubber-ducky-mcp
+COPY --from=builder /out/critical-thinking /critical-thinking
 
-LABEL org.opencontainers.image.title="Rubber Ducky MCP"
-LABEL org.opencontainers.image.description="MCP server for critical, narrated, sequential thinking"
+LABEL org.opencontainers.image.title="Critical Thinking"
+LABEL org.opencontainers.image.description="MCP server for critical, narrated, sequential thinking — paired with a Claude Code skill"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.created="${BUILDTIME}"
 LABEL org.opencontainers.image.revision="${REVISION}"
-LABEL org.opencontainers.image.source="https://github.com/jacaudi/rubber-ducky-mcp"
+LABEL org.opencontainers.image.source="https://github.com/jacaudi/critical-thinking-plugin"
 
 ENV DOCKER=true
 EXPOSE 3000
@@ -39,5 +39,5 @@ EXPOSE 3000
 # /health from the network. No HEALTHCHECK directive in the image.
 
 USER nonroot:nonroot
-ENTRYPOINT ["/rubber-ducky-mcp"]
+ENTRYPOINT ["/critical-thinking"]
 CMD ["-http", ":3000"]

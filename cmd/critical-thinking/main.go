@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jacaudi/rubber-ducky-mcp/internal/thinking"
+	"github.com/jacaudi/critical-thinking-plugin/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -118,7 +118,7 @@ func runHTTP(addr string) {
 		}
 	}()
 
-	log.Printf("rubber-ducky-mcp %s listening on http://%s", version, listenAddr)
+	log.Printf("critical-thinking %s listening on http://%s", version, listenAddr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("listen: %v", err)
 	}
@@ -131,7 +131,7 @@ func runHTTP(addr string) {
 // state). Stdio mode calls it once with a single global state.
 func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
-		Name:    "rubber-ducky-mcp",
+		Name:    "critical-thinking",
 		Version: version,
 	}, nil)
 
