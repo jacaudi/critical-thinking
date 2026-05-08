@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1](https://github.com/jacaudi/critical-thinking-plugin/compare/v1.2.0...v1.2.1) (2026-05-08)
+
+### Bug Fixes
+
+* **docs:** drop plugin scaffolding, add Claude Code recipes, auto-bump docker tags ([7438b38](https://github.com/jacaudi/critical-thinking-plugin/commit/7438b38a9c2b2576628f03aa1ee1ce16b4376c9c))
+
 ## [1.2.0](https://github.com/jacaudi/critical-thinking-plugin/compare/v1.1.0...v1.2.0) (2026-05-08)
 
 ### Features
