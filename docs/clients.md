@@ -117,7 +117,7 @@ For browser-based clients, set `ALLOWED_ORIGINS` to permit your origin — see [
 ## Docker
 
 ```bash
-docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.3.0
+docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.3.1
 ```
 
 Then use the HTTP client config above. The image binds to `0.0.0.0` automatically (via `DOCKER=true`); pair it with appropriate firewall rules in production.

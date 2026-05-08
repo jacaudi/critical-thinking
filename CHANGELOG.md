@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.1](https://github.com/jacaudi/critical-thinking-mcp/compare/v1.3.0...v1.3.1) (2026-05-08)
+
+### Bug Fixes
+
+* **deps:** update module github.com/modelcontextprotocol/go-sdk to v1.6.0 ([daa3f2f](https://github.com/jacaudi/critical-thinking-mcp/commit/daa3f2ff262fb56ee5201a0534ca087a86343122))
+
 ## [1.3.0](https://github.com/jacaudi/critical-thinking-mcp/compare/v1.2.1...v1.3.0) (2026-05-08)
 
 * refactor!: rename repo and module path from critical-thinking-plugin to critical-thinking-mcp ([#41](https://github.com/jacaudi/critical-thinking-mcp/issues/41)) ([2b0e040](https://github.com/jacaudi/critical-thinking-mcp/commit/2b0e0400f36f7a0dbe019238b43a4005450b7c2a))
