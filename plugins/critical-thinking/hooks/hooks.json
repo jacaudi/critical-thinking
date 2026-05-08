@@ -1,0 +1,17 @@
+{
+  "description": "critical-thinking plugin: ensure the MCP server binary is installed at session start",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/install-binary.sh\"",
+            "async": false
+          }
+        ]
+      }
+    ]
+  }
+}
