@@ -1,0 +1,33 @@
+---
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: critical-thinking
+builds:
+  - dir: ./cmd/critical-thinking
+    main: .
+    binary: critical-thinking
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+archives:
+  - name_template: "{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+checksum:
+  name_template: "checksums.txt"
+release:
+  # semantic-release owns the GitHub Release; goreleaser only produces artifacts.
+  disable: true
+changelog:
+  # semantic-release owns the changelog.
+  disable: true

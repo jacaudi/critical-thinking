@@ -1,0 +1,38 @@
+---
+# Release pipeline: semantic-release analyses conventional commits on main,
+# decides whether a new version is warranted, and (on release) invokes
+# goreleaser to cross-compile the critical-thinking binary and attach the
+# archives to the GitHub Release.
+name: Release
+
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One release at a time; queue subsequent runs.
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    uses: jacaudi/github-actions/.github/workflows/component-semantic-release.yml@v0.20.3
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    with:
+      use-github-app: true
+      go: true
+      goreleaser: true
+      extra-plugins: '@semantic-release/changelog @semantic-release/git @semantic-release/exec'
+    secrets:
+      app-id: ${{ secrets.BOT_APP_ID }}
+      app-private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
