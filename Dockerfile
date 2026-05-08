@@ -30,7 +30,7 @@ LABEL org.opencontainers.image.description="MCP server for critical, narrated, s
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.created="${BUILDTIME}"
 LABEL org.opencontainers.image.revision="${REVISION}"
-LABEL org.opencontainers.image.source="https://github.com/jacaudi/critical-thinking-plugin"
+LABEL org.opencontainers.image.source="https://github.com/jacaudi/critical-thinking-mcp"
 
 ENV DOCKER=true
 EXPOSE 3000

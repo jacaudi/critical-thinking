@@ -1,4 +1,4 @@
-module github.com/jacaudi/critical-thinking-plugin
+module github.com/jacaudi/critical-thinking-mcp
 
 go 1.26
 

@@ -2,6 +2,17 @@
 
 Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
 
+## Repo rename: `critical-thinking-plugin` → `critical-thinking-mcp`
+
+The repo was renamed to drop the `-plugin` suffix, since the Claude Code plugin scaffolding was removed and the project is now solely an MCP server.
+
+- **GitHub repo** is now `jacaudi/critical-thinking-mcp`. GitHub redirects keep the old URL working, but new bookmarks and CI references should use the new name.
+- **Go module path** is now `github.com/jacaudi/critical-thinking-mcp`. Update import paths if you depend on `internal/thinking` from outside this repo.
+- **`go install`** is now `go install github.com/jacaudi/critical-thinking-mcp/cmd/critical-thinking@latest`. The binary still lands at `$GOPATH/bin/critical-thinking`.
+- **Docker image** unchanged: `ghcr.io/jacaudi/critical-thinking:<tag>` (the image name was already decoupled from the repo name).
+- **Binary, MCP `Implementation.Name`, and server log line** unchanged: `critical-thinking`.
+- **Client-side server aliases** (the key under `mcpServers` in `mcp.json`) are user-controlled and unaffected.
+
 ## Project rename: `rubber-ducky-mcp` → `critical-thinking`
 
 The whole project was renamed to align with the discipline it teaches. Specifics:
