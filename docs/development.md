@@ -7,7 +7,7 @@ Go 1.26+. No other build dependencies (the MCP SDK is a Go module).
 ## Build
 
 ```bash
-go build -ldflags "-X main.version=$(git describe --tags --always)" -o rubber-ducky-mcp .
+go build -ldflags "-X main.version=$(git describe --tags --always)" -o critical-thinking ./cmd/critical-thinking
 ```
 
 The `-X main.version=...` flag stamps the build with a version string surfaced via `/health` and the MCP `Implementation.Version`.
@@ -28,10 +28,10 @@ The fastest way to manually exercise the tool is the official [MCP Inspector](ht
 
 ```bash
 # stdio
-npx @modelcontextprotocol/inspector rubber-ducky-mcp
+npx @modelcontextprotocol/inspector critical-thinking
 
 # HTTP
-rubber-ducky-mcp -http :3000 &
+critical-thinking -http :3000 &
 npx @modelcontextprotocol/inspector --uri http://localhost:3000/mcp
 ```
 
@@ -41,22 +41,24 @@ The inspector lets you call `criticalthinking` interactively, watch the rendered
 
 ```
 .
-├── main.go                       # MCP transport adapter (stdio + HTTP)
-├── main_test.go                  # cross-session isolation integration test
+├── cmd/critical-thinking/
+│   ├── main.go                   # MCP transport adapter (stdio + HTTP)
+│   └── main_test.go              # cross-session isolation integration test
 ├── internal/thinking/
 │   ├── description.go            # tool description (the prompt-engineering contract)
 │   ├── schema.go                 # ThoughtData / ThoughtResponse + Validate()
 │   ├── server.go                 # SequentialThinkingServer state machine
 │   └── *_test.go                 # unit tests
+├── plugins/critical-thinking/    # Claude Code plugin (skill + manifest)
 ├── Dockerfile                    # multi-stage, distroless final
 └── docker-bake.hcl               # buildx bake config
 ```
 
-The `internal/thinking` package has zero dependency on the MCP SDK — `main.go` is the only adapter. That keeps the state machine fully unit-testable.
+The `internal/thinking` package has zero dependency on the MCP SDK — `cmd/critical-thinking/main.go` is the only adapter. That keeps the state machine fully unit-testable.
 
 ## Release workflow
 
-CI runs on push and PR via GitHub Actions: `vet`, `gofmt`, `go test -race -count=1 ./...`, and a Docker build. Releases are tag-driven; tagging `vX.Y.Z` triggers the release workflow which builds and pushes the multi-arch Docker image to `ghcr.io/jacaudi/rubber-ducky-mcp:vX.Y.Z` and updates `:latest`.
+CI runs on push and PR via GitHub Actions: `vet`, `gofmt`, `go test -race -count=1 ./...`, and a Docker build. Releases are tag-driven; tagging `vX.Y.Z` triggers the release workflow which builds and pushes the multi-arch Docker image to `ghcr.io/jacaudi/critical-thinking:vX.Y.Z` and updates `:latest`.
 
 ## Treating the description as a protocol
 

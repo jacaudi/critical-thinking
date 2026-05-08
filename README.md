@@ -1,11 +1,11 @@
-# Rubber Ducky MCP
+# Critical Thinking Plugin
 
-A Model Context Protocol server for **critical, narrated, sequential thinking**. A rubber duck you talk to while you think — one step at a time — with required confidence calibration and adversarial self-critique on every thought.
+A Model Context Protocol server for **critical, narrated, sequential thinking**. Think one step at a time, out loud — with required confidence calibration and adversarial self-critique on every thought.
 
 It fuses three disciplines:
 
 1. **Sequential thinking** — break problems into ordered, numbered steps; revise; branch.
-2. **Rubber-duck narration** — explain each thought out loud, in first-person, to an imagined listener.
+2. **Thinking out loud** — explain each thought in first-person, exploratory voice. Putting half-formed reasoning into words is itself the double-check on it.
 3. **Critical self-examination** — every thought is paired with confidence, assumptions, critique, and a counter-argument.
 
 The single tool is `criticalthinking`. Every call must include the four critical-thinking fields — there is no opt-out, by design.
@@ -13,24 +13,24 @@ The single tool is `criticalthinking`. Every call must include the four critical
 ## Install
 
 ```bash
-go install github.com/jacaudi/rubber-ducky-mcp@latest
+go install github.com/jacaudi/critical-thinking-plugin/cmd/critical-thinking@latest
 # or
-docker pull ghcr.io/jacaudi/rubber-ducky-mcp:latest
+docker pull ghcr.io/jacaudi/critical-thinking:latest
 ```
 
-The Go install lands the binary at `$GOPATH/bin/rubber-ducky-mcp`.
+The Go install lands the binary at `$GOPATH/bin/critical-thinking`.
 
 ## Run
 
 ```bash
 # stdio (default; for Claude Desktop, Codex CLI, VS Code, etc.)
-rubber-ducky-mcp
+critical-thinking
 
 # Streamable HTTP
-rubber-ducky-mcp -http :3000
+critical-thinking -http :3000
 
 # Docker (HTTP on :3000)
-docker run --rm -p 3000:3000 ghcr.io/jacaudi/rubber-ducky-mcp:latest
+docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:latest
 ```
 
 ## One-call example
@@ -55,7 +55,7 @@ Response (`structuredContent`):
 { "branches": [], "thoughtHistoryLength": 1, "sessionConfidence": 0.6 }
 ```
 
-The `text` content is a rendered transcript in rubber-duck voice. Subsequent calls can omit `thoughtNumber` (auto-assigned) and `totalThoughts` (inherited). Every critical-thinking field has a server-side length cap to enforce one-tight-sentence discipline. The full contract lives in the tool description itself.
+The `text` content is a rendered transcript in first-person, exploratory voice. Subsequent calls can omit `thoughtNumber` (auto-assigned) and `totalThoughts` (inherited). Every critical-thinking field has a server-side length cap to enforce one-tight-sentence discipline. The full contract lives in the tool description itself.
 
 ## Client setup
 
@@ -64,7 +64,7 @@ The `text` content is a rendered transcript in rubber-duck voice. Subsequent cal
 ```json
 {
   "mcpServers": {
-    "rubber-ducky": { "command": "rubber-ducky-mcp" }
+    "critical-thinking": { "command": "critical-thinking" }
   }
 }
 ```
@@ -74,7 +74,7 @@ Or HTTP:
 ```json
 {
   "mcpServers": {
-    "rubber-ducky": { "url": "http://localhost:3000/mcp" }
+    "critical-thinking": { "url": "http://localhost:3000/mcp" }
   }
 }
 ```
@@ -91,6 +91,10 @@ The server exposes `thinking://current` — a per-session JSON snapshot of the f
 - [docs/clients.md](docs/clients.md) — Claude Desktop, Codex CLI, VS Code, Cursor recipes
 - [docs/development.md](docs/development.md) — building, testing, debugging with MCP Inspector
 - [docs/migration.md](docs/migration.md) — breaking changes since `http-sequential-thinking`
+
+## Claude Code plugin
+
+The [`critical-thinking`](plugins/critical-thinking/) plugin teaches Claude *when* to reach for the `criticalthinking` tool — both as the primary thinking process (in place of silent extended thinking or v1 sequential-thinking) and as the post-hoc pressure-test after another thinking session. The MCP server is the *how* and *why*; the plugin is the *when*.
 
 ## License
 

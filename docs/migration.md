@@ -1,6 +1,23 @@
 # Migration
 
-Cumulative breaking-change log for `rubber-ducky-mcp`. Most recent changes first.
+Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
+
+## Project rename: `rubber-ducky-mcp` → `critical-thinking`
+
+The whole project was renamed to align with the discipline it teaches. Specifics:
+
+- **GitHub repo** moved to `jacaudi/critical-thinking-plugin` (the `-plugin` suffix only appears in the repo URL and top-level README title).
+- **Go module path** is now `github.com/jacaudi/critical-thinking-plugin` (follows the repo URL). Update import paths if you depend on `internal/thinking` from outside this repo.
+- **Entry point moved to `./cmd/critical-thinking/`.** `go install` is now `go install github.com/jacaudi/critical-thinking-plugin/cmd/critical-thinking@latest`. The binary still lands at `$GOPATH/bin/critical-thinking`. Build commands updated everywhere (Dockerfile, CI action, dev docs).
+- **Binary name** is now `critical-thinking` (was `rubber-ducky-mcp`). Update `mcp.json` `command` fields and any shell scripts.
+- **Docker image** is now `ghcr.io/jacaudi/critical-thinking:<tag>` (was `ghcr.io/jacaudi/rubber-ducky-mcp:<tag>`). The previous image tags remain accessible at the old name until removed; new releases publish only to the new name.
+- **MCP `Implementation.Name`** is now `critical-thinking` (was `rubber-ducky-mcp`). Affects what hosts display in their MCP server lists.
+- **Server log line** prefix updated to `critical-thinking`.
+- **Client-side server aliases** (the key under `mcpServers` in `mcp.json`) are user-controlled and unaffected. Suggested key in docs is now `"critical-thinking"`.
+
+## Tool description rewritten — "Thinking out loud" replaces the rubber-duck framing
+
+The verbatim description registered on the `criticalthinking` tool was rewritten. Discipline #2 changed from "Rubber-duck narration" to "Thinking out loud." The mechanism is unchanged (first-person, exploratory voice; hedges and self-corrections welcome) but the framing is now: putting half-formed reasoning into words is itself the double-check on it. No field semantics changed; no caps changed; no required fields added or removed. Per the protocol-level treatment of `description.go`, this is a behavior-affecting change for client agents that read the tool description and adjust their voice.
 
 ## From `0.6.x` (post-rewrite, prior to length-cap and optional-field work)
 
