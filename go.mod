@@ -1,6 +1,6 @@
 module github.com/jacaudi/critical-thinking-plugin
 
-go 1.26
+go 1.26.3
 
 require github.com/modelcontextprotocol/go-sdk v1.5.0
 
