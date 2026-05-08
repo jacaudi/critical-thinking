@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0](https://github.com/jacaudi/critical-thinking-plugin/compare/v1.1.0...v1.2.0) (2026-05-08)
+
+### Features
+
+* **hook:** pin binary version in script; CI auto-bumps on every release ([d1ff595](https://github.com/jacaudi/critical-thinking-plugin/commit/d1ff595cf4d3856f9439887b4e3a3d8c55c2f10a))
+
 ## [1.1.0](https://github.com/jacaudi/critical-thinking-plugin/compare/v1.0.0...v1.1.0) (2026-05-08)
 
 ### Features

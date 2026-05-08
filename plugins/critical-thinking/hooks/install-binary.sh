@@ -27,7 +27,7 @@ PROJECT="critical-thinking"
 
 # DO NOT EDIT BY HAND. Auto-bumped on every release by semantic-release
 # (see .releaserc.json `@semantic-release/exec` prepareCmd).
-EXPECTED_VERSION="v1.1.0"
+EXPECTED_VERSION="v1.2.0"
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")")"/.. && pwd)}"
 BIN_DIR="${PLUGIN_ROOT}/bin"
