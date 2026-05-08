@@ -2,6 +2,38 @@
 
 All snippets assume the binary `critical-thinking` is on your `$PATH`. After `go install github.com/jacaudi/critical-thinking-plugin/cmd/critical-thinking@latest`, that's `$GOPATH/bin/critical-thinking` — make sure `$GOPATH/bin` is on `$PATH`, or use the absolute path in the `command` field.
 
+## Claude Code
+
+### stdio
+
+```bash
+claude mcp add critical-thinking -- critical-thinking
+```
+
+Add `--scope user` to make it available in every project, or `--scope project` to commit it to a `.mcp.json` file in the repo. The default `local` scope keeps it private to the current project on this machine.
+
+### Streamable HTTP
+
+Run the server in one terminal:
+
+```bash
+critical-thinking -http :3000
+```
+
+Register it with Claude Code:
+
+```bash
+claude mcp add --transport http critical-thinking http://localhost:3000/mcp
+```
+
+### Verify
+
+```bash
+claude mcp list
+```
+
+Inside a Claude Code session, `/mcp` shows live status, and the `criticalthinking` tool will appear in tool listings.
+
 ## Claude Desktop
 
 `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
@@ -85,7 +117,7 @@ For browser-based clients, set `ALLOWED_ORIGINS` to permit your origin — see [
 ## Docker
 
 ```bash
-docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:latest
+docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.2.0
 ```
 
 Then use the HTTP client config above. The image binds to `0.0.0.0` automatically (via `DOCKER=true`); pair it with appropriate firewall rules in production.

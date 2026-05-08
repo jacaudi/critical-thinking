@@ -15,7 +15,7 @@ The single tool is `criticalthinking`. Every call must include the four critical
 ```bash
 go install github.com/jacaudi/critical-thinking-plugin/cmd/critical-thinking@latest
 # or
-docker pull ghcr.io/jacaudi/critical-thinking:latest
+docker pull ghcr.io/jacaudi/critical-thinking:v1.2.0
 ```
 
 The Go install lands the binary at `$GOPATH/bin/critical-thinking`.
@@ -30,7 +30,7 @@ critical-thinking
 critical-thinking -http :3000
 
 # Docker (HTTP on :3000)
-docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:latest
+docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.2.0
 ```
 
 ## One-call example
@@ -58,6 +58,29 @@ Response (`structuredContent`):
 The `text` content is a rendered transcript in first-person, exploratory voice. Subsequent calls can omit `thoughtNumber` (auto-assigned) and `totalThoughts` (inherited). Every critical-thinking field has a server-side length cap to enforce one-tight-sentence discipline. The full contract lives in the tool description itself.
 
 ## Client setup
+
+### Claude Code
+
+Add the server with the `claude` CLI — pick one transport.
+
+**stdio** (the binary runs as a subprocess of Claude Code):
+
+```bash
+claude mcp add critical-thinking -- critical-thinking
+```
+
+**Streamable HTTP** (run the server separately, point Claude Code at the URL):
+
+```bash
+critical-thinking -http :3000 &
+claude mcp add --transport http critical-thinking http://localhost:3000/mcp
+```
+
+Scope it with `--scope user` (available in every project for your user) or `--scope project` (committed to `.mcp.json` in the repo). Default scope is `local` (this project, your machine only).
+
+Verify with `claude mcp list`. Inside a session, `/mcp` shows server status and tools.
+
+### Other clients
 
 `mcp.json` (Claude Desktop / Codex CLI / VS Code):
 
@@ -91,10 +114,6 @@ The server exposes `thinking://current` — a per-session JSON snapshot of the f
 - [docs/clients.md](docs/clients.md) — Claude Desktop, Codex CLI, VS Code, Cursor recipes
 - [docs/development.md](docs/development.md) — building, testing, debugging with MCP Inspector
 - [docs/migration.md](docs/migration.md) — breaking changes since `http-sequential-thinking`
-
-## Claude Code plugin
-
-The [`critical-thinking`](plugins/critical-thinking/) plugin teaches Claude *when* to reach for the `criticalthinking` tool — both as the primary thinking process (in place of silent extended thinking or v1 sequential-thinking) and as the post-hoc pressure-test after another thinking session. The MCP server is the *how* and *why*; the plugin is the *when*.
 
 ## License
 

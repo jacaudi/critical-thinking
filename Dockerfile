@@ -26,7 +26,7 @@ FROM gcr.io/distroless/static-debian12:nonroot AS release
 COPY --from=builder /out/critical-thinking /critical-thinking
 
 LABEL org.opencontainers.image.title="Critical Thinking"
-LABEL org.opencontainers.image.description="MCP server for critical, narrated, sequential thinking — paired with a Claude Code skill"
+LABEL org.opencontainers.image.description="MCP server for critical, narrated, sequential thinking"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.created="${BUILDTIME}"
 LABEL org.opencontainers.image.revision="${REVISION}"

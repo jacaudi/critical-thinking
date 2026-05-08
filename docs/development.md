@@ -49,7 +49,6 @@ The inspector lets you call `criticalthinking` interactively, watch the rendered
 │   ├── schema.go                 # ThoughtData / ThoughtResponse + Validate()
 │   ├── server.go                 # SequentialThinkingServer state machine
 │   └── *_test.go                 # unit tests
-├── plugins/critical-thinking/    # Claude Code plugin (skill + manifest)
 ├── Dockerfile                    # multi-stage, distroless final
 └── docker-bake.hcl               # buildx bake config
 ```
