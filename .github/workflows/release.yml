@@ -2,7 +2,8 @@
 # Release pipeline: semantic-release analyses conventional commits on main,
 # decides whether a new version is warranted, and (on release) invokes
 # goreleaser to cross-compile the critical-thinking binary and attach the
-# archives to the GitHub Release.
+# archives to the GitHub Release. When a release is published, also build
+# and push the multi-arch container image with version tags.
 name: Release
 
 "on":
@@ -17,6 +18,7 @@ concurrency:
 
 permissions:
   contents: write
+  packages: write
   issues: write
   pull-requests: write
 
@@ -36,3 +38,48 @@ jobs:
     secrets:
       app-id: ${{ secrets.BOT_APP_ID }}
       app-private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+
+  # Derive major and major.minor from the released semver so the container
+  # image gets the full set of moving tags (v1, v1.0, v1.0.0).
+  version-parts:
+    needs: release
+    if: needs.release.outputs.new-release-published == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      major: ${{ steps.parse.outputs.major }}
+      minor: ${{ steps.parse.outputs.minor }}
+    steps:
+      - id: parse
+        env:
+          VERSION: ${{ needs.release.outputs.new-release-version }}
+        run: |
+          echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
+          echo "minor=$(echo "$VERSION" | cut -d. -f1-2)" >> "$GITHUB_OUTPUT"
+
+  # Build and push the multi-arch container image with the full set of
+  # version tags. Image name decouples from the repo name (which carries the
+  # `-plugin` suffix) so users pull `ghcr.io/jacaudi/critical-thinking`.
+  container-image:
+    needs: [release, version-parts]
+    if: needs.release.outputs.new-release-published == 'true'
+    uses: jacaudi/github-actions/.github/workflows/component-container-build.yml@v0.20.3
+    permissions:
+      contents: read
+      packages: write
+    with:
+      registry: ghcr.io
+      image-name: ${{ github.repository_owner }}/critical-thinking
+      platforms: linux/amd64,linux/arm64
+      push: true
+      file: ./Dockerfile
+      version: ${{ needs.release.outputs.new-release-version-v }}
+      build-args: |
+        VERSION=${{ needs.release.outputs.new-release-version }}
+        BUILDTIME=${{ github.event.head_commit.timestamp }}
+        REVISION=${{ github.sha }}
+      tags: |
+        ghcr.io/${{ github.repository_owner }}/critical-thinking:latest
+        ghcr.io/${{ github.repository_owner }}/critical-thinking:${{ needs.release.outputs.new-release-version-v }}
+        ghcr.io/${{ github.repository_owner }}/critical-thinking:v${{ needs.version-parts.outputs.minor }}
+        ghcr.io/${{ github.repository_owner }}/critical-thinking:v${{ needs.version-parts.outputs.major }}
+    secrets: inherit
