@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0](https://github.com/jacaudi/critical-thinking-plugin/compare/v1.0.0...v1.1.0) (2026-05-08)
+
+### Features
+
+* **ci:** build versioned container image as part of release ([96bdfff](https://github.com/jacaudi/critical-thinking-plugin/commit/96bdfff9ca8c7f498e47372f9cbeb302ba89dc6f))
+
 ## 1.0.0 (2026-05-08)
 
 ### Bug Fixes
