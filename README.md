@@ -1,4 +1,4 @@
-# Critical Thinking Plugin
+# Critical Thinking MCP
 
 A Model Context Protocol server for **critical, narrated, sequential thinking**. Think one step at a time, out loud — with required confidence calibration and adversarial self-critique on every thought.
 
@@ -13,7 +13,7 @@ The single tool is `criticalthinking`. Every call must include the four critical
 ## Install
 
 ```bash
-go install github.com/jacaudi/critical-thinking-plugin/cmd/critical-thinking@latest
+go install github.com/jacaudi/critical-thinking-mcp/cmd/critical-thinking@latest
 # or
 docker pull ghcr.io/jacaudi/critical-thinking:v1.2.1
 ```

@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jacaudi/critical-thinking-plugin/internal/thinking"
+	"github.com/jacaudi/critical-thinking-mcp/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
