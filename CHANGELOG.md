@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.4.1](https://github.com/jacaudi/critical-thinking/compare/v1.4.0...v1.4.1) (2026-05-12)
+
 ## [1.4.0](https://github.com/jacaudi/critical-thinking/compare/v1.3.1...v1.4.0) (2026-05-12)
 
 * refactor!: drop -mcp suffix from repo name and module path ([#42](https://github.com/jacaudi/critical-thinking/issues/42)) ([b299e6b](https://github.com/jacaudi/critical-thinking/commit/b299e6ba7330a5ea58f61971cdfe98622a3b4fb8))

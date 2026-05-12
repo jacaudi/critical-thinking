@@ -15,7 +15,7 @@ The single tool is `criticalthinking`. Every call must include the four critical
 ```bash
 go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest
 # or
-docker pull ghcr.io/jacaudi/critical-thinking:v1.4.0
+docker pull ghcr.io/jacaudi/critical-thinking:v1.4.1
 ```
 
 The Go install lands the binary at `$GOPATH/bin/critical-thinking`.
@@ -30,7 +30,7 @@ critical-thinking
 critical-thinking -http :3000
 
 # Docker (HTTP on :3000)
-docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.4.0
+docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.4.1
 ```
 
 ## One-call example
