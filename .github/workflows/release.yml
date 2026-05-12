@@ -34,7 +34,7 @@ jobs:
       use-github-app: true
       go: true
       goreleaser: true
-      extra-plugins: '@semantic-release/changelog @semantic-release/git @semantic-release/exec'
+      extra-plugins: '@semantic-release/changelog @semantic-release/git @semantic-release/exec conventional-changelog-conventionalcommits'
     secrets:
       app-id: ${{ secrets.BOT_APP_ID }}
       app-private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
