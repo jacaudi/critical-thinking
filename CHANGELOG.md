@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.2](https://github.com/jacaudi/critical-thinking/compare/v1.4.1...v1.4.2) (2026-05-12)
+### Bug Fixes
+
+* **release:** use conventionalcommits preset so chore(deps) appears in release notes ([#43](https://github.com/jacaudi/critical-thinking/issues/43)) ([31fca77](https://github.com/jacaudi/critical-thinking/commit/31fca77de3b8f6f3c2b8ccb8a8c7fffe7f50ee44))
+
 ## [1.4.1](https://github.com/jacaudi/critical-thinking/compare/v1.4.0...v1.4.1) (2026-05-12)
 
 ## [1.4.0](https://github.com/jacaudi/critical-thinking/compare/v1.3.1...v1.4.0) (2026-05-12)
