@@ -1,6 +1,6 @@
 # Client setup
 
-All snippets assume the binary `critical-thinking` is on your `$PATH`. After `go install github.com/jacaudi/critical-thinking-mcp/cmd/critical-thinking@latest`, that's `$GOPATH/bin/critical-thinking` — make sure `$GOPATH/bin` is on `$PATH`, or use the absolute path in the `command` field.
+All snippets assume the binary `critical-thinking` is on your `$PATH`. After `go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest`, that's `$GOPATH/bin/critical-thinking` — make sure `$GOPATH/bin` is on `$PATH`, or use the absolute path in the `command` field.
 
 ## Claude Code
 

@@ -2,6 +2,15 @@
 
 Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
 
+## Repo rename: `critical-thinking-mcp` → `critical-thinking`
+
+The repo was renamed to drop the `-mcp` suffix and align with the upstream `sequentialthinking` MCP server naming. The image, binary, and tool name were already unsuffixed; the repo and module path now match.
+
+- **GitHub repo** is now `jacaudi/critical-thinking`. GitHub redirects keep the old `critical-thinking-mcp` URL working.
+- **Go module path** is now `github.com/jacaudi/critical-thinking`. Update import paths if you depend on `internal/thinking` from outside this repo — `go install` against the old path will fail (Go module paths do not redirect).
+- **`go install`** is now `go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest`. The binary still lands at `$GOPATH/bin/critical-thinking`.
+- **Docker image, binary name, MCP `Implementation.Name`, server log line, and `mcp.json` server alias** all unchanged: `critical-thinking`.
+
 ## Repo rename: `critical-thinking-plugin` → `critical-thinking-mcp`
 
 The repo was renamed to drop the `-plugin` suffix, since the Claude Code plugin scaffolding was removed and the project is now solely an MCP server.
