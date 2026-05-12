@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jacaudi/critical-thinking-mcp/internal/thinking"
+	"github.com/jacaudi/critical-thinking/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

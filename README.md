@@ -13,7 +13,7 @@ The single tool is `criticalthinking`. Every call must include the four critical
 ## Install
 
 ```bash
-go install github.com/jacaudi/critical-thinking-mcp/cmd/critical-thinking@latest
+go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest
 # or
 docker pull ghcr.io/jacaudi/critical-thinking:v1.3.1
 ```

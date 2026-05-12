@@ -57,8 +57,7 @@ jobs:
           echo "minor=$(echo "$VERSION" | cut -d. -f1-2)" >> "$GITHUB_OUTPUT"
 
   # Build and push the multi-arch container image with the full set of
-  # version tags. Image name decouples from the repo name (which carries the
-  # `-mcp` suffix) so users pull `ghcr.io/jacaudi/critical-thinking`.
+  # version tags. Image and repo names now match: `ghcr.io/jacaudi/critical-thinking`.
   container-image:
     needs: [release, version-parts]
     if: needs.release.outputs.new-release-published == 'true'
