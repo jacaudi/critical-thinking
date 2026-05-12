@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.0](https://github.com/jacaudi/critical-thinking/compare/v1.3.1...v1.4.0) (2026-05-12)
+
+* refactor!: drop -mcp suffix from repo name and module path ([#42](https://github.com/jacaudi/critical-thinking/issues/42)) ([b299e6b](https://github.com/jacaudi/critical-thinking/commit/b299e6ba7330a5ea58f61971cdfe98622a3b4fb8))
+
+
+### BREAKING CHANGES
+
+* external consumers of `internal/thinking` must update
+import paths to github.com/jacaudi/critical-thinking. GitHub keeps the
+old repo URL working via redirect, but Go module paths do not redirect.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+* docs: drop MCP from README H1 to match seqthinking naming
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
 ## [1.3.1](https://github.com/jacaudi/critical-thinking-mcp/compare/v1.3.0...v1.3.1) (2026-05-08)
 
 ### Bug Fixes
