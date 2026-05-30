@@ -400,8 +400,8 @@ func TestRunCLIValidationErrorRouting(t *testing.T) {
 	if code := runCLI(strings.NewReader(bad), &out2, &errb2, true); code != 1 {
 		t.Errorf("json mode exit = %d; want 1", code)
 	}
-	if !strings.Contains(out2.String(), `"status":"failed"`) {
-		t.Errorf("json: error JSON should go to stdout; out=%q", out2.String())
+	if !strings.Contains(out2.String(), `"status":"failed"`) || errb2.Len() != 0 {
+		t.Errorf("json: error JSON should go to stdout only; out=%q err=%q", out2.String(), errb2.String())
 	}
 }
 
