@@ -17,7 +17,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 go build \
     -trimpath \
-    -ldflags "-s -w -X main.version=${VERSION}" \
+    -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${REVISION} -X main.date=${BUILDTIME}" \
     -o /out/critical-thinking ./cmd/critical-thinking
 
 # ---- final ----
