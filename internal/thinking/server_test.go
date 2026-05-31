@@ -3,7 +3,7 @@ package thinking
 import (
 	"encoding/json"
 	"math"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -155,7 +155,7 @@ func TestProcessThoughtRecordsBranch(t *testing.T) {
 
 	var resp ThoughtResponse
 	_ = json.Unmarshal([]byte(res.StructuredJSON), &resp)
-	sort.Strings(resp.Branches)
+	slices.Sort(resp.Branches)
 	if len(resp.Branches) != 1 || resp.Branches[0] != "branch-a" {
 		t.Errorf("Branches = %v, want [branch-a]", resp.Branches)
 	}
