@@ -48,7 +48,8 @@ func printSchema(w io.Writer) error {
 }
 
 // newSchemaCmd prints the criticalthinking tool contract and exits. On failure
-// it writes a diagnostic to stderr (the root silences cobra's own error output).
+// it writes a `schema:`-prefixed diagnostic to stderr and returns the error for
+// a non-zero exit; stdout carries only the schema JSON.
 func newSchemaCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "schema",

@@ -12,11 +12,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// errCLIFailed is a message-less sentinel returned by the cli command's RunE
-// when at least one input line failed. runCLI has already written per-line
-// diagnostics to stderr; this sentinel exists only to drive main()'s exit code
-// to 1. It carries no message because the root silences cobra error output and
-// main exits silently.
+// errCLIFailed is the sentinel returned by the cli command's RunE when at least
+// one input line failed. runCLI has already written per-line diagnostics to
+// stderr; this sentinel drives main()'s exit code to 1. The root leaves
+// SilenceErrors=false, so cobra also prints this error's message to stderr as a
+// one-line summary — never to stdout.
 var errCLIFailed = errors.New("cli: one or more input lines failed")
 
 // runCLI runs the thinking engine over a plain stdin→stdout loop (no MCP).
