@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.6.0](https://github.com/jacaudi/critical-thinking/compare/v1.5.0...v1.6.0) (2026-06-02)
+### ⚠ BREAKING CHANGES
+
+* the CLI invocation surface moved from flags to Cobra subcommands. Bare `critical-thinking` now prints help instead of starting stdio; use `critical-thinking serve`. Mapping: `-http :3000`->`serve --http :3000`, `-cli`->`cli`, `-cli -json`->`cli --json`; `schema` unchanged; adds `version` subcommand and `--version`. mcp.json stdio entries that used `"command": "critical-thinking"` with no args must add `"args": ["serve"]`; URL-based HTTP entries are unchanged. No engine, field, schema, cap, resource, or transport behavior changed.
+
+### Features
+
+* replace flag CLI with cobra subcommand tree ([#51](https://github.com/jacaudi/critical-thinking/issues/51)) ([8c95ec4](https://github.com/jacaudi/critical-thinking/commit/8c95ec4e643a73e68b24f60513ce3dabf22d4652))
+
+### Build System
+
+* standards refactor phase 0 - tooling, lint, modern-Go, zero behavior change ([#50](https://github.com/jacaudi/critical-thinking/issues/50)) ([b3c50f2](https://github.com/jacaudi/critical-thinking/commit/b3c50f23f3af4abdbff6d5a1b7a0079ecd93d226))
+
+### Continuous Integration
+
+* build golangci-lint from source to match the go 1.26 target ([#53](https://github.com/jacaudi/critical-thinking/issues/53)) ([e672078](https://github.com/jacaudi/critical-thinking/commit/e672078e5c2a3acf62fceea0ff609415763df5e9))
+
+### Chores
+
+* gitignore the critical-thinking binary and bin/ build dir ([#52](https://github.com/jacaudi/critical-thinking/issues/52)) ([06f1afb](https://github.com/jacaudi/critical-thinking/commit/06f1afb26bbbae0eeeeb0bdcddc8925268fe3d3f))
+
 ## [1.5.0](https://github.com/jacaudi/critical-thinking/compare/v1.4.2...v1.5.0) (2026-05-31)
 ### Features
 
