@@ -1,6 +1,6 @@
 module github.com/jacaudi/critical-thinking
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/google/jsonschema-go v0.4.3
