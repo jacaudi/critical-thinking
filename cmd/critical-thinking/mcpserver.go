@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,15 +26,20 @@ const (
 
 // runStdio runs the server with one global SequentialThinkingServer instance.
 // One process = one session, no cross-stream risk by definition.
-func runStdio() {
+func runStdio() error {
 	state := thinking.NewServer()
 	srv := newMCPServer(state)
 
-	transport := &mcp.LoggingTransport{Transport: &mcp.StdioTransport{}, Writer: os.Stderr}
-	if err := srv.Run(context.Background(), transport); err != nil {
-		log.Printf("server failed: %v", err)
-		os.Exit(1)
+	var transport mcp.Transport = &mcp.StdioTransport{}
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		// --verbose: trace every JSON-RPC frame to stderr (stdout is the protocol).
+		transport = &mcp.LoggingTransport{Transport: transport, Writer: os.Stderr}
 	}
+
+	if err := srv.Run(context.Background(), transport); err != nil {
+		return fmt.Errorf("server failed: %w", err)
+	}
+	return nil
 }
 
 // runHTTP starts a Streamable HTTP server. Each session gets its own
@@ -50,16 +56,15 @@ func runStdio() {
 // The registry is NOT synchronized with the SDK's view of live sessions — once
 // the SDK closes a session we have no callback, so the count drifts upward.
 // /health exposes it as `sessionsCreated` to make the semantics explicit.
-func runHTTP(addr string) {
+func runHTTP(addr string) error {
 	// Wire ALLOWED_ORIGINS into the SDK's CSRF protection so browser clients
 	// from those origins aren't rejected by the SDK's default same-origin
 	// policy. Non-browser callers (no Origin / no Sec-Fetch-Site) are still
-	// allowed regardless. Built before the signal context's defer stop() is
-	// registered so a fatal config error here can't skip a pending defer.
+	// allowed regardless.
 	csrf := http.NewCrossOriginProtection()
 	for _, o := range parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS")) {
 		if err := csrf.AddTrustedOrigin(o); err != nil {
-			log.Fatalf("invalid ALLOWED_ORIGINS entry %q: %v", o, err)
+			return fmt.Errorf("invalid ALLOWED_ORIGINS entry %q: %w", o, err)
 		}
 	}
 
@@ -71,6 +76,7 @@ func runHTTP(addr string) {
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		state := thinking.NewServer()
 		registry.add(state)
+		slog.Debug("http session created", "sessionsCreated", registry.count())
 		return newMCPServer(state)
 	}, &mcp.StreamableHTTPOptions{
 		SessionTimeout:        idleTimeout,
@@ -99,17 +105,15 @@ func runHTTP(addr string) {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown: %v", err)
+			slog.Error("graceful shutdown failed", "err", err)
 		}
 	}()
 
-	log.Printf("critical-thinking %s listening on http://%s", version, listenAddr)
+	slog.Info("listening", "url", "http://"+listenAddr, "version", version)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		//nolint:gocritic // defer stop() only unregisters signal handlers and is
-		// moot at process exit; the alternatives (return / os.Exit) would change the
-		// non-zero exit code or require refactoring runHTTP's signature.
-		log.Fatalf("listen: %v", err)
+		return fmt.Errorf("listen: %w", err)
 	}
+	return nil
 }
 
 // newMCPServer constructs a configured *mcp.Server with the criticalthinking

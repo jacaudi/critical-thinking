@@ -9,8 +9,8 @@ import (
 // default to the real runStdio/runHTTP.
 type serveCmd struct {
 	*cobra.Command
-	stdioRun func()
-	httpRun  func(addr string)
+	stdioRun func() error
+	httpRun  func(addr string) error
 }
 
 // newServeCmd builds the `serve` command. With no --http flag it runs the
@@ -31,11 +31,9 @@ func newServeCmd() *serveCmd {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if httpAddr != "" {
-				c.httpRun(httpAddr)
-				return nil
+				return c.httpRun(httpAddr)
 			}
-			c.stdioRun()
-			return nil
+			return c.stdioRun()
 		},
 	}
 	c.Command.Flags().StringVar(&httpAddr, "http", "", `serve Streamable HTTP at this address (e.g. ":3000"); empty = stdio`)
