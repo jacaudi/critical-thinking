@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.7.0](https://github.com/jacaudi/critical-thinking/compare/v1.6.0...v1.7.0) (2026-06-06)
+### Features
+
+* route logging through log/slog to stderr; add --verbose/--log-format ([#57](https://github.com/jacaudi/critical-thinking/issues/57)) ([359587d](https://github.com/jacaudi/critical-thinking/commit/359587d05e547b38a782ca05bf6379d02765f074))
+
+### Documentation
+
+* correct the migration log heading from v2.0.0 to v1.6.0 ([#54](https://github.com/jacaudi/critical-thinking/issues/54)) ([48f0600](https://github.com/jacaudi/critical-thinking/commit/48f0600848e5c0ab6a3d167c9334100f1c5ed8e2))
+
 ## [1.6.0](https://github.com/jacaudi/critical-thinking/compare/v1.5.0...v1.6.0) (2026-06-02)
 ### ⚠ BREAKING CHANGES
 
