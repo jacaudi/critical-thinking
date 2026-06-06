@@ -40,6 +40,8 @@ critical-thinking schema          # prints the tool contract (description + JSON
 
 See [docs/clients.md#cli-no-mcp-host](docs/clients.md#cli-no-mcp-host) for CLI usage details and error-handling behaviour.
 
+Logs go to stderr. `--verbose` raises the level to debug (and traces JSON-RPC frames in stdio mode) and `--log-format=text|json` selects the format. See [docs/configuration.md#logging](docs/configuration.md#logging).
+
 ## One-call example
 
 Request:

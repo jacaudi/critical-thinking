@@ -2,6 +2,16 @@
 
 Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
 
+## v1.7.0 — Logging routed to stderr; `--verbose` / `--log-format`
+
+Non-breaking. Logging moved to `log/slog`, always on **stderr**. Two new persistent
+root flags: `--verbose` (debug level; also enables stdio JSON-RPC frame tracing) and
+`--log-format=text|json` (default `text`).
+
+**Behavior change:** stdio `serve` no longer traces every JSON-RPC frame to stderr by
+default — that trace is now opt-in via `--verbose`. stdout (the protocol channel) is
+unchanged. No engine, field, schema, or transport behavior changed.
+
 ## v1.6.0 — Flag CLI replaced by Cobra subcommands
 
 The invocation surface moved from flags to subcommands. Every capability is unchanged —
