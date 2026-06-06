@@ -26,6 +26,22 @@ critical-thinking serve --http :3000
 
 The HTTP server binds to `127.0.0.1` by default (or `0.0.0.0` when `DOCKER=true`). Each session gets its own `*mcp.Server` with its own `SequentialThinkingServer`, constructed inside a factory closure — there is no map keyed by session ID anywhere, by design. The closure scope is the cross-session isolation invariant.
 
+## Logging
+
+All logs go to **stderr** via `log/slog`. In stdio mode stdout is the JSON-RPC
+channel, and in `cli` / `schema` / `version` it carries command output — so nothing
+but protocol/output ever reaches stdout.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--verbose` | off | Sets the log level to `Debug`. In stdio mode it also traces every JSON-RPC frame to stderr (off by default). |
+| `--log-format` | `text` | Handler format: `text` (human-readable) or `json` (structured). Any other value exits non-zero with an error on stderr. |
+
+Both are persistent root flags, so they work before or after any subcommand
+(`critical-thinking --verbose serve`, `critical-thinking serve --log-format=json`).
+The library engine (`internal/thinking`) emits no logs — it returns errors and lets
+the caller decide.
+
 ## HTTP endpoints
 
 | Path | Methods | Purpose |
