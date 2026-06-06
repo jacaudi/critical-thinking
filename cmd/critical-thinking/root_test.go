@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -89,5 +91,45 @@ func TestRootUnknownCommandWritesStderrNotStdout(t *testing.T) {
 	}
 	if !strings.Contains(errBuf.String(), "unknown command") {
 		t.Errorf("stderr should describe the unknown command; got: %q", errBuf.String())
+	}
+}
+
+// TestRootInvalidLogFormatKeepsStdoutClean: a bad --log-format fails closed via
+// newLogger before any subcommand runs, on stderr only (stdout stays clean).
+func TestRootInvalidLogFormatKeepsStdoutClean(t *testing.T) {
+	cmd := newRootCmd()
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"--log-format", "yaml", "version"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("invalid --log-format should return an error")
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout must stay clean on invalid --log-format; got %q", out.String())
+	}
+	if !strings.Contains(errBuf.String(), "want text|json") {
+		t.Errorf("stderr should carry newLogger's validation message; got %q", errBuf.String())
+	}
+}
+
+// TestRootVerboseEnablesDebug: --verbose makes PersistentPreRunE install a
+// Debug-level default logger before the (runnable) subcommand executes.
+func TestRootVerboseEnablesDebug(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	cmd := newRootCmd()
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"--verbose", "version"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() err = %v", err)
+	}
+	if !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		t.Error("--verbose should set the default logger to Debug level")
 	}
 }

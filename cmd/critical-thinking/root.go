@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -39,6 +40,28 @@ func newRootCmd() *cobra.Command {
 	// Default I/O to the process streams; tests override via SetOut/SetErr.
 	root.SetOut(os.Stdout)
 	root.SetErr(os.Stderr)
+
+	// Phase 2 (D6): root persistent flags wired to slog. --verbose lowers the
+	// level to Debug (and enables the stdio JSON-RPC frame trace, see runStdio);
+	// --log-format selects the handler. The {text,json} contract lives in
+	// newLogger, which returns an error on any other value.
+	var verbose bool
+	var logFormat string
+	root.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable debug logging (and stdio JSON-RPC frame tracing)")
+	root.PersistentFlags().StringVar(&logFormat, "log-format", "text", "log output format: text|json")
+
+	root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+		level := slog.LevelInfo
+		if verbose {
+			level = slog.LevelDebug
+		}
+		logger, err := newLogger(os.Stderr, level, logFormat) // newLogger validates logFormat
+		if err != nil {
+			return err // SilenceErrors=false → cobra prints to stderr; never stdout
+		}
+		slog.SetDefault(logger)
+		return nil
+	}
 
 	root.AddCommand(
 		newServeCmd().Command,
