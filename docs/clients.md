@@ -115,7 +115,7 @@ critical-thinking serve --http :3000
 }
 ```
 
-For browser-based clients, set `ALLOWED_ORIGINS` to permit your origin — see [configuration.md](configuration.md).
+For browser-based clients, set `CTHINK_ALLOWED_ORIGINS` to permit your origin — see [configuration.md](configuration.md).
 
 ## Docker
 
@@ -123,7 +123,7 @@ For browser-based clients, set `ALLOWED_ORIGINS` to permit your origin — see [
 docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.7.0
 ```
 
-Then use the HTTP client config above. The image binds to `0.0.0.0` automatically (via `DOCKER=true`); pair it with appropriate firewall rules in production.
+Then use the HTTP client config above. The image binds to `0.0.0.0` automatically (via `CTHINK_HTTP_HOST=0.0.0.0`); pair it with appropriate firewall rules in production.
 
 ## CLI (no MCP host)
 

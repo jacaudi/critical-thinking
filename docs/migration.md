@@ -2,6 +2,19 @@
 
 Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
 
+## v1.8.0 — Config via Viper; `CTHINK_` env prefix
+
+**Breaking (env var renames).** Configuration moved to Viper with the `CTHINK_` prefix:
+
+| Old | New |
+|---|---|
+| `ALLOWED_ORIGINS` | `CTHINK_ALLOWED_ORIGINS` |
+| `DOCKER=true` | `CTHINK_HTTP_HOST=0.0.0.0` |
+
+The logging flags are now also env-backed: `CTHINK_VERBOSE` and `CTHINK_LOG_FORMAT`
+(precedence flag > env > default). The published Docker image and its default command
+are updated accordingly. No engine, field, schema, or transport behavior changed.
+
 ## v1.7.0 — Logging routed to stderr; `--verbose` / `--log-format`
 
 Non-breaking. Logging moved to `log/slog`, always on **stderr**. Two new persistent
