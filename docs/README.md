@@ -4,7 +4,7 @@ Reference material for `critical-thinking`. The top-level [README](../README.md)
 
 | File | Covers |
 |---|---|
-| [configuration.md](configuration.md) | Env vars (`ALLOWED_ORIGINS`, `DOCKER`, `DISABLE_THOUGHT_LOGGING`), HTTP endpoints, session lifecycle, idle timeout |
+| [configuration.md](configuration.md) | Env vars (`CTHINK_ALLOWED_ORIGINS`, `CTHINK_HTTP_HOST`, `CTHINK_VERBOSE`, `CTHINK_LOG_FORMAT`), HTTP endpoints, session lifecycle, idle timeout |
 | [clients.md](clients.md) | `mcp.json` snippets for Claude Desktop, Codex CLI, VS Code, Cursor — both stdio and HTTP transports |
 | [development.md](development.md) | Building, running tests with `-race`, debugging with MCP Inspector, release workflow |
 | [migration.md](migration.md) | Cumulative breaking-change log since the `http-sequential-thinking` Node predecessor |

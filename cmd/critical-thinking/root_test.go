@@ -133,3 +133,66 @@ func TestRootVerboseEnablesDebug(t *testing.T) {
 		t.Error("--verbose should set the default logger to Debug level")
 	}
 }
+
+// TestRootVerboseEnvEnablesDebug: CTHINK_VERBOSE=true (env, no flag) enables Debug.
+func TestRootVerboseEnvEnablesDebug(t *testing.T) {
+	t.Setenv("CTHINK_VERBOSE", "true")
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	cmd := newRootCmd()
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"version"}) // runnable subcommand → PersistentPreRunE runs
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() err = %v", err)
+	}
+	if !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		t.Error("CTHINK_VERBOSE=true should set the default logger to Debug")
+	}
+}
+
+// TestRootInvalidLogFormatEnvKeepsStdoutClean: a bad CTHINK_LOG_FORMAT (env)
+// fails closed via newLogger, on stderr only.
+func TestRootInvalidLogFormatEnvKeepsStdoutClean(t *testing.T) {
+	t.Setenv("CTHINK_LOG_FORMAT", "yaml")
+	cmd := newRootCmd()
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"version"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("invalid CTHINK_LOG_FORMAT should return an error")
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout must stay clean; got %q", out.String())
+	}
+	if !strings.Contains(errBuf.String(), "want text|json") {
+		t.Errorf("stderr should carry newLogger's validation message; got %q", errBuf.String())
+	}
+}
+
+// TestRootVerboseFlagOverridesEnv exercises the full cobra path (flags parsed
+// before PersistentPreRunE) to prove the precedence promise end-to-end: a
+// passed --verbose wins over a conflicting CTHINK_VERBOSE=false. The bindFlags
+// unit tests assert this at the boundary; this locks in the integration.
+func TestRootVerboseFlagOverridesEnv(t *testing.T) {
+	t.Setenv("CTHINK_VERBOSE", "false")
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	cmd := newRootCmd()
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"--verbose", "version"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() err = %v", err)
+	}
+	if !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		t.Error("--verbose must override CTHINK_VERBOSE=false (flag > env)")
+	}
+}

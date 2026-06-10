@@ -4,9 +4,14 @@
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `ALLOWED_ORIGINS` | (empty) | Comma-separated list of browser origins permitted to call `/mcp`. Wired into both the outer CORS layer and the SDK's CSRF protection (`http.CrossOriginProtection.AddTrustedOrigin`). Default rejects all browser origins. Non-browser callers (no `Origin` / no `Sec-Fetch-Site` header) are unaffected. |
-| `DOCKER` | unset | When `true`, HTTP server binds to `0.0.0.0` instead of `127.0.0.1`. Set automatically in the published Docker image. |
-| `DISABLE_THOUGHT_LOGGING` | unset | Reserved for the future structured-log gate. The current server emits no per-thought logs by default. |
+| `CTHINK_ALLOWED_ORIGINS` | (empty) | Comma-separated list of browser origins permitted to call `/mcp`. Wired into both the outer CORS layer and the SDK's CSRF protection (`http.CrossOriginProtection.AddTrustedOrigin`). Default rejects all browser origins. Non-browser callers (no `Origin` / no `Sec-Fetch-Site` header) are unaffected. |
+| `CTHINK_HTTP_HOST` | `127.0.0.1` | Host the HTTP server binds to. Set to `0.0.0.0` to bind all interfaces (the published Docker image sets this). |
+| `CTHINK_VERBOSE` | `false` | Enables debug logging (and the stdio JSON-RPC frame trace). Env equivalent of `--verbose`; the flag overrides it. |
+| `CTHINK_LOG_FORMAT` | `text` | Log handler format: `text` or `json`. Env equivalent of `--log-format`; the flag overrides it. |
+
+All config is read through Viper with the `CTHINK_` prefix. For the logging
+settings, precedence is **flag > env > default** (e.g. `--log-format` overrides
+`CTHINK_LOG_FORMAT` overrides `text`).
 
 ## Transports
 
@@ -24,7 +29,7 @@ One process serves one session. There is no cross-stream isolation concern becau
 critical-thinking serve --http :3000
 ```
 
-The HTTP server binds to `127.0.0.1` by default (or `0.0.0.0` when `DOCKER=true`). Each session gets its own `*mcp.Server` with its own `SequentialThinkingServer`, constructed inside a factory closure — there is no map keyed by session ID anywhere, by design. The closure scope is the cross-session isolation invariant.
+The HTTP server binds to `127.0.0.1` by default (set `CTHINK_HTTP_HOST=0.0.0.0` to bind all interfaces). Each session gets its own `*mcp.Server` with its own `SequentialThinkingServer`, constructed inside a factory closure — there is no map keyed by session ID anywhere, by design. The closure scope is the cross-session isolation invariant.
 
 ## Logging
 
@@ -39,6 +44,7 @@ but protocol/output ever reaches stdout.
 
 Both are persistent root flags, so they work before or after any subcommand
 (`critical-thinking --verbose serve`, `critical-thinking serve --log-format=json`).
+They also read from `CTHINK_VERBOSE` / `CTHINK_LOG_FORMAT` (flag > env > default).
 The library engine (`internal/thinking`) emits no logs — it returns errors and lets
 the caller decide.
 
@@ -57,6 +63,6 @@ There is no callback fired when the SDK closes a session, so the in-process regi
 
 ## CORS and CSRF
 
-When `ALLOWED_ORIGINS` is empty, browser requests with an `Origin` header are rejected with HTTP 403. Non-browser clients (no `Origin`, no `Sec-Fetch-Site`) bypass the check entirely. When set, matching origins receive `Access-Control-Allow-Origin: <origin>`, `Access-Control-Allow-Credentials: true`, `Access-Control-Expose-Headers: mcp-session-id`, and a `Vary: Origin` header for cache-poisoning mitigation.
+When `CTHINK_ALLOWED_ORIGINS` is empty, browser requests with an `Origin` header are rejected with HTTP 403. Non-browser clients (no `Origin`, no `Sec-Fetch-Site`) bypass the check entirely. When set, matching origins receive `Access-Control-Allow-Origin: <origin>`, `Access-Control-Allow-Credentials: true`, `Access-Control-Expose-Headers: mcp-session-id`, and a `Vary: Origin` header for cache-poisoning mitigation.
 
 The same origin list is registered with the SDK's CSRF protection (`http.CrossOriginProtection.AddTrustedOrigin`) so the SDK's same-origin policy doesn't double-reject permitted browser callers.

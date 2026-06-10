@@ -41,21 +41,24 @@ func newRootCmd() *cobra.Command {
 	root.SetOut(os.Stdout)
 	root.SetErr(os.Stderr)
 
-	// Phase 2 (D6): root persistent flags wired to slog. --verbose lowers the
-	// level to Debug (and enables the stdio JSON-RPC frame trace, see runStdio);
-	// --log-format selects the handler. The {text,json} contract lives in
-	// newLogger, which returns an error on any other value.
-	var verbose bool
-	var logFormat string
-	root.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable debug logging (and stdio JSON-RPC frame tracing)")
-	root.PersistentFlags().StringVar(&logFormat, "log-format", "text", "log output format: text|json")
+	// Phase 2/3: root persistent flags backed by Viper (CTHINK_ env prefix).
+	// --verbose / CTHINK_VERBOSE lowers the level to Debug (and enables the stdio
+	// JSON-RPC frame trace, see runStdio); --log-format / CTHINK_LOG_FORMAT selects
+	// the handler. Precedence flag > env > default. The {text,json} contract lives
+	// in newLogger, which returns an error on any other value.
+	root.PersistentFlags().Bool("verbose", false, "enable debug logging (and stdio JSON-RPC frame tracing)")
+	root.PersistentFlags().String("log-format", "text", "log output format: text|json")
+	v := newConfigViper()
 
-	root.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		if err := bindFlags(v, cmd.Flags()); err != nil {
+			return err
+		}
 		level := slog.LevelInfo
-		if verbose {
+		if v.GetBool("verbose") {
 			level = slog.LevelDebug
 		}
-		logger, err := newLogger(os.Stderr, level, logFormat) // newLogger validates logFormat
+		logger, err := newLogger(os.Stderr, level, v.GetString("log_format"))
 		if err != nil {
 			return err // SilenceErrors=false → cobra prints to stderr; never stdout
 		}
@@ -64,7 +67,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	root.AddCommand(
-		newServeCmd().Command,
+		newServeCmd(v).Command,
 		newCliCmd(),
 		newSchemaCmd(),
 		newVersionCmd(),
