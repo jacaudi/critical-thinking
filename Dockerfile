@@ -32,7 +32,7 @@ LABEL org.opencontainers.image.created="${BUILDTIME}"
 LABEL org.opencontainers.image.revision="${REVISION}"
 LABEL org.opencontainers.image.source="https://github.com/jacaudi/critical-thinking"
 
-ENV DOCKER=true
+ENV CTHINK_HTTP_HOST=0.0.0.0
 EXPOSE 3000
 
 # distroless has no shell or curl; orchestrator-level health probes hit
@@ -40,4 +40,4 @@ EXPOSE 3000
 
 USER nonroot:nonroot
 ENTRYPOINT ["/critical-thinking"]
-CMD ["-http", ":3000"]
+CMD ["serve", "--http", ":3000"]
