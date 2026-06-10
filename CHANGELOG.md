@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.8.0](https://github.com/jacaudi/critical-thinking/compare/v1.7.0...v1.8.0) (2026-06-10)
+### Features
+
+* configuration via Viper with CTHINK_ env prefix ([#59](https://github.com/jacaudi/critical-thinking/issues/59)) ([b1f9e9e](https://github.com/jacaudi/critical-thinking/commit/b1f9e9ecca4830ded2cc3b618221f775ffb305c4))
+
 ## [1.7.0](https://github.com/jacaudi/critical-thinking/compare/v1.6.0...v1.7.0) (2026-06-06)
 ### Features
 
