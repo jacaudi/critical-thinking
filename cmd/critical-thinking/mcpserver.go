@@ -56,15 +56,15 @@ func runStdio() error {
 // The registry is NOT synchronized with the SDK's view of live sessions — once
 // the SDK closes a session we have no callback, so the count drifts upward.
 // /health exposes it as `sessionsCreated` to make the semantics explicit.
-func runHTTP(addr string) error {
-	// Wire ALLOWED_ORIGINS into the SDK's CSRF protection so browser clients
-	// from those origins aren't rejected by the SDK's default same-origin
-	// policy. Non-browser callers (no Origin / no Sec-Fetch-Site) are still
-	// allowed regardless.
+func runHTTP(cfg httpConfig, addr string) error {
+	// Wire the configured allowed origins (CTHINK_ALLOWED_ORIGINS) into the SDK's
+	// CSRF protection so browser clients from those origins aren't rejected by the
+	// SDK's default same-origin policy. Non-browser callers (no Origin /
+	// no Sec-Fetch-Site) are still allowed regardless.
 	csrf := http.NewCrossOriginProtection()
-	for _, o := range parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS")) {
+	for _, o := range cfg.AllowedOrigins {
 		if err := csrf.AddTrustedOrigin(o); err != nil {
-			return fmt.Errorf("invalid ALLOWED_ORIGINS entry %q: %w", o, err)
+			return fmt.Errorf("invalid CTHINK_ALLOWED_ORIGINS entry %q: %w", o, err)
 		}
 	}
 
@@ -83,12 +83,8 @@ func runHTTP(addr string) error {
 		CrossOriginProtection: csrf,
 	})
 
-	host := "127.0.0.1"
-	if os.Getenv("DOCKER") == "true" {
-		host = "0.0.0.0"
-	}
-	// addr like ":3000" already includes the colon; combine with host.
-	listenAddr := host + addr
+	// addr like ":3000" already includes the colon; combine with the configured host.
+	listenAddr := cfg.HTTPHost + addr
 
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
@@ -96,7 +92,7 @@ func runHTTP(addr string) error {
 
 	srv := &http.Server{
 		Addr:              listenAddr,
-		Handler:           withCORS(mux),
+		Handler:           withCORS(mux, cfg.AllowedOrigins),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -224,8 +220,8 @@ func (r *sessionRegistry) count() int {
 	return len(r.states)
 }
 
-// withCORS gates browser access via the ALLOWED_ORIGINS env var (comma-
-// separated list). Default is empty — no browser origins allowed.
+// withCORS gates browser access via the configured allowed-origins list
+// (CTHINK_ALLOWED_ORIGINS). Empty means no browser origins allowed.
 //
 // When an origin matches:
 //   - Access-Control-Allow-Origin: <origin>
@@ -234,8 +230,7 @@ func (r *sessionRegistry) count() int {
 //   - Vary: Origin                                   (cache-poisoning mitigation)
 //
 // Non-browser callers (no Origin header) bypass the check entirely.
-func withCORS(h http.Handler) http.Handler {
-	allowed := parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS"))
+func withCORS(h http.Handler, allowed []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" {

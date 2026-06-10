@@ -6,15 +6,17 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
 func TestServeCmdDefaultsToStdio(t *testing.T) {
-	cmd := newServeCmd()
+	cmd := newServeCmd(newConfigViper())
 
 	var stdioCalled bool
 	var httpAddr string
 	cmd.stdioRun = func() error { stdioCalled = true; return nil }
-	cmd.httpRun = func(addr string) error { httpAddr = addr; return nil }
+	cmd.httpRun = func(cfg httpConfig, addr string) error { httpAddr = addr; return nil }
 
 	cmd.SetArgs([]string{})
 	if err := cmd.Execute(); err != nil {
@@ -29,12 +31,12 @@ func TestServeCmdDefaultsToStdio(t *testing.T) {
 }
 
 func TestServeCmdHTTPWhenFlagSet(t *testing.T) {
-	cmd := newServeCmd()
+	cmd := newServeCmd(newConfigViper())
 
 	var stdioCalled bool
 	var httpAddr string
 	cmd.stdioRun = func() error { stdioCalled = true; return nil }
-	cmd.httpRun = func(addr string) error { httpAddr = addr; return nil }
+	cmd.httpRun = func(cfg httpConfig, addr string) error { httpAddr = addr; return nil }
 
 	cmd.SetArgs([]string{"--http", ":3000"})
 	if err := cmd.Execute(); err != nil {
@@ -49,10 +51,10 @@ func TestServeCmdHTTPWhenFlagSet(t *testing.T) {
 }
 
 func TestServeRunEPropagatesError(t *testing.T) {
-	cmd := newServeCmd()
+	cmd := newServeCmd(viper.New())
 	wantErr := errors.New("boom")
 	cmd.stdioRun = func() error { return wantErr }
-	cmd.httpRun = func(string) error { return nil }
+	cmd.httpRun = func(httpConfig, string) error { return nil }
 	cmd.SetArgs([]string{})
 	err := cmd.Execute()
 	if !errors.Is(err, wantErr) {
@@ -69,7 +71,7 @@ func TestServeStdoutStaysCleanWhenLogging(t *testing.T) {
 	prev := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
-	c := newServeCmd()
+	c := newServeCmd(newConfigViper())
 	var logBuf bytes.Buffer
 	c.stdioRun = func() error {
 		logger, err := newLogger(&logBuf, slog.LevelInfo, "text")
@@ -93,5 +95,25 @@ func TestServeStdoutStaysCleanWhenLogging(t *testing.T) {
 	}
 	if !strings.Contains(logBuf.String(), "serve is logging") {
 		t.Errorf("log record should reach the stderr-side buffer; got %q", logBuf.String())
+	}
+}
+
+func TestServeHTTPPathBuildsConfigFromViper(t *testing.T) {
+	t.Setenv("CTHINK_ALLOWED_ORIGINS", "https://app.example")
+	t.Setenv("CTHINK_HTTP_HOST", "0.0.0.0")
+	cmd := newServeCmd(newConfigViper())
+
+	var gotCfg httpConfig
+	cmd.httpRun = func(cfg httpConfig, addr string) error { gotCfg = cfg; return nil }
+	cmd.stdioRun = func() error { return nil }
+	cmd.SetArgs([]string{"--http", ":3000"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() err = %v", err)
+	}
+	if gotCfg.HTTPHost != "0.0.0.0" {
+		t.Errorf("HTTPHost = %q, want 0.0.0.0", gotCfg.HTTPHost)
+	}
+	if len(gotCfg.AllowedOrigins) != 1 || gotCfg.AllowedOrigins[0] != "https://app.example" {
+		t.Errorf("AllowedOrigins = %v, want [https://app.example]", gotCfg.AllowedOrigins)
 	}
 }

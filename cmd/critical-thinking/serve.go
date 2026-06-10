@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // serveCmd wraps the cobra command with overridable run hooks so path
@@ -10,12 +11,13 @@ import (
 type serveCmd struct {
 	*cobra.Command
 	stdioRun func() error
-	httpRun  func(addr string) error
+	httpRun  func(cfg httpConfig, addr string) error
 }
 
 // newServeCmd builds the `serve` command. With no --http flag it runs the
-// stdio MCP transport; with --http <addr> it runs the Streamable HTTP server.
-func newServeCmd() *serveCmd {
+// stdio MCP transport; with --http <addr> it runs the Streamable HTTP server,
+// resolving its config (origins, host) from the shared Viper instance v.
+func newServeCmd(v *viper.Viper) *serveCmd {
 	c := &serveCmd{
 		stdioRun: runStdio,
 		httpRun:  runHTTP,
@@ -31,7 +33,7 @@ func newServeCmd() *serveCmd {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if httpAddr != "" {
-				return c.httpRun(httpAddr)
+				return c.httpRun(httpConfigFromViper(v), httpAddr)
 			}
 			return c.stdioRun()
 		},

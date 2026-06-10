@@ -16,10 +16,9 @@ import (
 )
 
 func TestCORSDefaultRejectsBrowser(t *testing.T) {
-	t.Setenv("ALLOWED_ORIGINS", "")
 	h := withCORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
+	}), nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
 	req.Header.Set("Origin", "https://evil.example")
@@ -32,11 +31,9 @@ func TestCORSDefaultRejectsBrowser(t *testing.T) {
 }
 
 func TestCORSAllowsConfiguredOrigin(t *testing.T) {
-	t.Setenv("ALLOWED_ORIGINS", "https://app.example,https://other.example")
-
 	h := withCORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
+	}), []string{"https://app.example", "https://other.example"})
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
 	req.Header.Set("Origin", "https://app.example")
@@ -58,10 +55,9 @@ func TestCORSAllowsConfiguredOrigin(t *testing.T) {
 }
 
 func TestCORSAllowsNoOrigin(t *testing.T) {
-	t.Setenv("ALLOWED_ORIGINS", "")
 	h := withCORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
+	}), nil)
 	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
 	// no Origin header
 	rec := httptest.NewRecorder()
@@ -254,7 +250,7 @@ func TestCrossSessionIsolation(t *testing.T) {
 	mux.Handle("/mcp", mcpHandler)
 	mux.HandleFunc("/health", makeHealthHandler(registry))
 
-	ts := httptest.NewServer(withCORS(mux))
+	ts := httptest.NewServer(withCORS(mux, nil))
 	defer ts.Close()
 
 	clientA := newHTTPClient(t, ts.URL)
@@ -306,7 +302,7 @@ func TestThinkingCurrentResourceIsPerSession(t *testing.T) {
 	}, nil)
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcpHandler)
-	ts := httptest.NewServer(withCORS(mux))
+	ts := httptest.NewServer(withCORS(mux, nil))
 	defer ts.Close()
 
 	clientA := newHTTPClient(t, ts.URL)
