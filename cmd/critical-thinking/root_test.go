@@ -174,3 +174,25 @@ func TestRootInvalidLogFormatEnvKeepsStdoutClean(t *testing.T) {
 		t.Errorf("stderr should carry newLogger's validation message; got %q", errBuf.String())
 	}
 }
+
+// TestRootVerboseFlagOverridesEnv exercises the full cobra path (flags parsed
+// before PersistentPreRunE) to prove the precedence promise end-to-end: a
+// passed --verbose wins over a conflicting CTHINK_VERBOSE=false. The bindFlags
+// unit tests assert this at the boundary; this locks in the integration.
+func TestRootVerboseFlagOverridesEnv(t *testing.T) {
+	t.Setenv("CTHINK_VERBOSE", "false")
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	cmd := newRootCmd()
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"--verbose", "version"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() err = %v", err)
+	}
+	if !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		t.Error("--verbose must override CTHINK_VERBOSE=false (flag > env)")
+	}
+}
