@@ -67,9 +67,10 @@ Or hand-write `mcp.json` (Claude Desktop / Codex CLI / VS Code):
 ## As a CLI pipe (no MCP host)
 
 `critical-thinking cli` runs the same thinking engine over stdin→stdout — no MCP
-host required. This is a first-class way to integrate: have your own agent,
-script, or orchestrator emit NDJSON `ThoughtData` (one JSON object per line) and
-read the result back.
+host required. This is **not** an MCP integration: no host is involved and no
+`criticalthinking` tool is exposed — you drive the binary yourself. Have your own
+agent, script, or orchestrator emit NDJSON `ThoughtData` (one JSON object per
+line) and read the result back.
 
 - `critical-thinking cli` prints a narrated transcript to stdout.
 - `critical-thinking cli --json` prints structured `ThoughtResponse` as NDJSON —
