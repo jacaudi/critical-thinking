@@ -67,6 +67,25 @@ func TestCORSAllowsNoOrigin(t *testing.T) {
 	}
 }
 
+// TestSessionRegistryCountsCreations characterizes the registry's only
+// behavior: count() returns the number of sessions ever added, and add() is
+// safe under concurrency. It must stay green across the slice→atomic refactor.
+func TestSessionRegistryCountsCreations(t *testing.T) {
+	r := newSessionRegistry()
+	if got := r.count(); got != 0 {
+		t.Fatalf("new registry count = %d, want 0", got)
+	}
+	const n = 50
+	var wg sync.WaitGroup
+	for range n {
+		wg.Go(func() { r.add(thinking.NewServer()) })
+	}
+	wg.Wait()
+	if got := r.count(); got != n {
+		t.Errorf("count after %d concurrent adds = %d, want %d", n, got, n)
+	}
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	registry := newSessionRegistry()
 	registry.add(thinking.NewServer())
