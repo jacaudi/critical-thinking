@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.8.1](https://github.com/jacaudi/critical-thinking/compare/v1.8.0...v1.8.1) (2026-06-11)
+### Bug Fixes
+
+* stop pinning closed HTTP session state; tidy slog key + docs ([#61](https://github.com/jacaudi/critical-thinking/issues/61)) ([b01f7a7](https://github.com/jacaudi/critical-thinking/commit/b01f7a7a7cf2e2828d70793fd9c0219aac9456a3))
+
+### Documentation
+
+* consolidate usage into docs/usage.md and correct the length-cap claim ([#60](https://github.com/jacaudi/critical-thinking/issues/60)) ([1001de4](https://github.com/jacaudi/critical-thinking/commit/1001de4d270b5ebbee89ebe70c2739c9f98166e7))
+
 ## [1.8.0](https://github.com/jacaudi/critical-thinking/compare/v1.7.0...v1.8.0) (2026-06-10)
 ### Features
 
