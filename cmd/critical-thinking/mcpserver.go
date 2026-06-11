@@ -101,7 +101,7 @@ func runHTTP(cfg httpConfig, addr string) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			slog.Error("graceful shutdown failed", "err", err)
+			slog.Error("graceful shutdown failed", "error", err)
 		}
 	}()
 

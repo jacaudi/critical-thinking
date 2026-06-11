@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+// Tests in this package install a process-global logger via slog.SetDefault
+// (through the root PersistentPreRunE and the serve logging stub). They must
+// NOT call t.Parallel: parallel tests would race on the global default logger.
+// Keep every test in this package serial.
 func TestRootBareShowsHelpAndExitsZero(t *testing.T) {
 	cmd := newRootCmd()
 	var out, errBuf bytes.Buffer
