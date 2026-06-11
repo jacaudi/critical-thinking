@@ -60,4 +60,4 @@ CI runs on push and PR via GitHub Actions: `vet`, `gofmt`, `go test -race -count
 
 ## Treating the description as a protocol
 
-The string in [`internal/thinking/description.go`](../internal/thinking/description.go) is the contract every client agent reads. Treat changes there like wire-format changes: bump the package version and add an entry to [migration.md](migration.md). Field renames, length-cap changes, or removed guidance can all silently break agent behavior.
+The string in [`internal/thinking/description.go`](../internal/thinking/description.go) is the contract every client agent reads. Treat changes there like wire-format changes: bump the package version and add an entry to [migration.md](migration.md). Field renames, semantic changes, or removed guidance can all silently break agent behavior.
