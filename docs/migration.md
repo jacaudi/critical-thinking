@@ -85,22 +85,9 @@ The whole project was renamed to align with the discipline it teaches. Specifics
 
 ## Tool description rewritten — "Thinking out loud" replaces the rubber-duck framing
 
-The verbatim description registered on the `criticalthinking` tool was rewritten. Discipline #2 changed from "Rubber-duck narration" to "Thinking out loud." The mechanism is unchanged (first-person, exploratory voice; hedges and self-corrections welcome) but the framing is now: putting half-formed reasoning into words is itself the double-check on it. No field semantics changed; no caps changed; no required fields added or removed. Per the protocol-level treatment of `description.go`, this is a behavior-affecting change for client agents that read the tool description and adjust their voice.
+The verbatim description registered on the `criticalthinking` tool was rewritten. Discipline #2 changed from "Rubber-duck narration" to "Thinking out loud." The mechanism is unchanged (first-person, exploratory voice; hedges and self-corrections welcome) but the framing is now: putting half-formed reasoning into words is itself the double-check on it. No field semantics changed; no required fields added or removed. Per the protocol-level treatment of `description.go`, this is a behavior-affecting change for client agents that read the tool description and adjust their voice.
 
-## From `0.6.x` (post-rewrite, prior to length-cap and optional-field work)
-
-### Length caps on critical fields
-
-Server-side rune-counted maxLength on the four critical-thinking fields. Over-cap requests return `IsError: true`.
-
-| Field | Cap (runes) | Notes |
-|---|---:|---|
-| `critique` | 280 | Always enforced |
-| `counterArgument` | 280 | Always enforced |
-| `assumptions[i]` | 200 | Per-entry |
-| `nextStepRationale` | 200 | Only enforced when `nextThoughtNeeded=true` |
-
-The caps are intentionally tight. They force one-tight-sentence-per-field discipline; padded prose returns an error rather than being silently accepted. If a critique genuinely needs more than 280 chars, split the thinking across two `criticalthinking` calls — that's the design intent.
+## From `0.6.x` (post-rewrite, prior to optional-field work)
 
 ### `thoughtNumber` and `totalThoughts` are now optional after the first thought
 
