@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"slices"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -101,7 +101,7 @@ func runHTTP(cfg httpConfig, addr string) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			slog.Error("graceful shutdown failed", "err", err)
+			slog.Error("graceful shutdown failed", "error", err)
 		}
 	}()
 
@@ -196,29 +196,24 @@ func makeResourceHandler(state *thinking.SequentialThinkingServer) func(context.
 	}
 }
 
-// sessionRegistry counts every session ever created in this process. It does
-// NOT mediate access to states — only the factory closure that created a state
-// holds the reference used by the tool handler — and it is NOT pruned when the
-// SDK closes idle sessions (we have no callback). Treat the count as a
-// lifetime "sessions created" counter, not an "active right now" gauge.
+// sessionRegistry counts every session ever created in this process. It holds
+// only a monotonic counter — never the session states themselves — so closed
+// sessions are not pinned here: the factory closure that created a state holds
+// the only live reference, leaving the state eligible for GC once the SDK
+// releases it. Treat the count as a lifetime "sessions created" counter, not an
+// "active right now" gauge.
 type sessionRegistry struct {
-	mu     sync.Mutex
-	states []*thinking.SequentialThinkingServer
+	created atomic.Int64
 }
 
 func newSessionRegistry() *sessionRegistry { return &sessionRegistry{} }
 
-func (r *sessionRegistry) add(s *thinking.SequentialThinkingServer) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.states = append(r.states, s)
-}
+// add records that a session was created. The *SequentialThinkingServer
+// argument is intentionally not retained (that would pin closed-session state);
+// it is kept in the signature so the call site reads naturally.
+func (r *sessionRegistry) add(*thinking.SequentialThinkingServer) { r.created.Add(1) }
 
-func (r *sessionRegistry) count() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return len(r.states)
-}
+func (r *sessionRegistry) count() int { return int(r.created.Load()) }
 
 // withCORS gates browser access via the configured allowed-origins list
 // (CTHINK_ALLOWED_ORIGINS). Empty means no browser origins allowed.

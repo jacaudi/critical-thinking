@@ -21,7 +21,8 @@ func newConfigViper() *viper.Viper {
 
 // bindFlags binds the logging persistent flags to their Viper keys so a passed
 // flag overrides env overrides default. flags is the running command's flag set
-// (it inherits the root persistent flags). It errors only if a flag is missing.
+// (it inherits the root persistent flags). It returns an error only if a named
+// flag is absent from flags — BindPFlag rejects a nil *pflag.Flag.
 func bindFlags(v *viper.Viper, flags *pflag.FlagSet) error {
 	if err := v.BindPFlag("verbose", flags.Lookup("verbose")); err != nil {
 		return err
