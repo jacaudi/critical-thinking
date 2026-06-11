@@ -198,10 +198,10 @@ func makeResourceHandler(state *thinking.SequentialThinkingServer) func(context.
 
 // sessionRegistry counts every session ever created in this process. It holds
 // only a monotonic counter — never the session states themselves — so closed
-// sessions are not pinned: the factory closure that created a state holds the
-// only live reference, and the SDK releases it on idle timeout for GC. Treat
-// the count as a lifetime "sessions created" counter, not an "active right
-// now" gauge.
+// sessions are not pinned here: the factory closure that created a state holds
+// the only live reference, leaving the state eligible for GC once the SDK
+// releases it. Treat the count as a lifetime "sessions created" counter, not an
+// "active right now" gauge.
 type sessionRegistry struct {
 	created atomic.Int64
 }
