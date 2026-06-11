@@ -77,9 +77,11 @@ read the result back.
 
 History, confidence, and branches accumulate across input lines within one run
 (the analog of a single stdio MCP session). Every line is processed; the command
-exits non-zero if any line fails (malformed JSON, validation error, or an engine
-error), writing a per-line diagnostic to stderr. Diagnostics never go to stdout,
-so a `--json` stream is always valid NDJSON.
+exits non-zero if any line fails. A malformed-JSON line is reported on stderr (in
+both modes). A line the engine rejects (for example a validation error) is
+reported on stderr in the default mode, or — in `--json` mode — emitted to stdout
+as a JSON error object (`{"error":…,"status":"failed"}`) so the `--json` stream
+stays complete and parseable line-for-line.
 
 Each `ThoughtData` line must carry the required fields — `thought`,
 `thoughtNumber`, `totalThoughts`, `nextThoughtNeeded`, `confidence` (0.0–1.0),
