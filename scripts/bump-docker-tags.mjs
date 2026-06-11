@@ -11,7 +11,7 @@ if (!version || !/^\d+\.\d+\.\d+/.test(version)) {
   process.exit(1);
 }
 
-const targets = ["README.md", "docs/clients.md"];
+const targets = ["README.md", "docs/clients.md", "docs/usage.md"];
 const pattern = /(ghcr\.io\/jacaudi\/critical-thinking:v)\d+\.\d+\.\d+/g;
 const replacement = `$1${version}`;
 
