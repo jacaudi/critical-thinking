@@ -10,37 +10,11 @@ It fuses three disciplines:
 
 The single tool is `criticalthinking`. Every call must include the four critical-thinking fields — there is no opt-out, by design.
 
-## Install
+**Install & usage → [docs/usage.md](docs/usage.md).** One-line install:
 
 ```bash
 go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest
-# or
-docker pull ghcr.io/jacaudi/critical-thinking:v1.8.0
 ```
-
-The Go install lands the binary at `$GOPATH/bin/critical-thinking`.
-
-## Run
-
-```bash
-# stdio (default; for Claude Desktop, Codex CLI, VS Code, etc.)
-critical-thinking serve
-
-# Streamable HTTP
-critical-thinking serve --http :3000
-
-# Docker (HTTP on :3000)
-docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.8.0
-
-# CLI mode — pipe NDJSON ThoughtData directly, no MCP host required
-critical-thinking cli             # prints narrated transcript to stdout
-critical-thinking cli --json      # prints structured ThoughtResponse as NDJSON
-critical-thinking schema          # prints the tool contract (description + JSON Schemas) and exits
-```
-
-See [docs/clients.md#cli-no-mcp-host](docs/clients.md#cli-no-mcp-host) for CLI usage details and error-handling behaviour.
-
-Logs go to stderr. `--verbose` raises the level to debug (and traces JSON-RPC frames in stdio mode) and `--log-format=text|json` selects the format. See [docs/configuration.md#logging](docs/configuration.md#logging).
 
 ## One-call example
 
@@ -64,54 +38,7 @@ Response (`structuredContent`):
 { "branches": [], "thoughtHistoryLength": 1, "sessionConfidence": 0.6 }
 ```
 
-The `text` content is a rendered transcript in first-person, exploratory voice. Subsequent calls can omit `thoughtNumber` (auto-assigned) and `totalThoughts` (inherited). Every critical-thinking field has a server-side length cap to enforce one-tight-sentence discipline. The full contract lives in the tool description itself.
-
-## Client setup
-
-### Claude Code
-
-Add the server with the `claude` CLI — pick one transport.
-
-**stdio** (the binary runs as a subprocess of Claude Code):
-
-```bash
-claude mcp add critical-thinking -- critical-thinking serve
-```
-
-**Streamable HTTP** (run the server separately, point Claude Code at the URL):
-
-```bash
-critical-thinking serve --http :3000 &
-claude mcp add --transport http critical-thinking http://localhost:3000/mcp
-```
-
-Scope it with `--scope user` (available in every project for your user) or `--scope project` (committed to `.mcp.json` in the repo). Default scope is `local` (this project, your machine only).
-
-Verify with `claude mcp list`. Inside a session, `/mcp` shows server status and tools.
-
-### Other clients
-
-`mcp.json` (Claude Desktop / Codex CLI / VS Code):
-
-```json
-{
-  "mcpServers": {
-    "critical-thinking": { "command": "critical-thinking", "args": ["serve"] }
-  }
-}
-```
-
-Or HTTP:
-
-```json
-{
-  "mcpServers": {
-    "critical-thinking": { "url": "http://localhost:3000/mcp" }
-  }
-}
-```
-
-More client recipes in [docs/clients.md](docs/clients.md).
+The `text` content is a rendered transcript in first-person, exploratory voice. Subsequent calls can omit `thoughtNumber` (auto-assigned) and `totalThoughts` (inherited). Keep each field to one tight sentence — the tool description asks for that brevity; the server does not enforce a hard limit. The full contract lives in the tool description itself.
 
 ## Resources
 
@@ -119,10 +46,12 @@ The server exposes `thinking://current` — a per-session JSON snapshot of the f
 
 ## Documentation
 
-- [docs/configuration.md](docs/configuration.md) — env vars, HTTP endpoints, session lifecycle
+- [docs/usage.md](docs/usage.md) — install, MCP-server & CLI-pipe usage, a worked session
+  - [Install](docs/usage.md#install) · [As an MCP server](docs/usage.md#as-an-mcp-server) · [As a CLI pipe](docs/usage.md#as-a-cli-pipe-no-mcp-host) · [Worked session](docs/usage.md#a-worked-session)
 - [docs/clients.md](docs/clients.md) — Claude Desktop, Codex CLI, VS Code, Cursor recipes
-- [docs/development.md](docs/development.md) — building, testing, debugging with MCP Inspector
+- [docs/configuration.md](docs/configuration.md) — env vars, HTTP endpoints, [logging](docs/configuration.md#logging), CORS, session lifecycle
 - [docs/migration.md](docs/migration.md) — breaking changes since `http-sequential-thinking`
+- [docs/development.md](docs/development.md) — building, testing, debugging with MCP Inspector
 
 ## License
 
