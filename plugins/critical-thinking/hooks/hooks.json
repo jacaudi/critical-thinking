@@ -1,0 +1,27 @@
+{
+  "description": "critical-thinking plugin: install the MCP binary at session start, and force the two-gate discipline on every prompt.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/install-binary.sh\"",
+            "async": false
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/activate.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
