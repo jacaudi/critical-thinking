@@ -1,0 +1,9 @@
+{
+  "name": "critical-thinking",
+  "description": "Always-on two-gate critical-thinking verification, backed by the critical-thinking MCP server.",
+  "version": "0.1.0",
+  "author": { "name": "jacaudi", "url": "https://github.com/jacaudi" },
+  "homepage": "https://github.com/jacaudi/critical-thinking",
+  "repository": "https://github.com/jacaudi/critical-thinking",
+  "license": "MIT"
+}
