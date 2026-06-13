@@ -40,11 +40,12 @@ if [[ -x "${BIN_PATH}" && -f "${INSTALLED_VERSION_FILE}" ]]; then
   fi
 fi
 
-case "$(uname -s)" in
+UNAME_S="$(uname -s)"
+case "${UNAME_S}" in
   Linux*)               OS=linux ;;
   Darwin*)              OS=darwin ;;
   MINGW*|MSYS*|CYGWIN*) OS=windows ;;
-  *) echo "critical-thinking: unsupported OS: $(uname -s)" >&2; exit 1 ;;
+  *) echo "critical-thinking: unsupported OS: ${UNAME_S}" >&2; exit 1 ;;
 esac
 
 case "$(uname -m)" in
@@ -61,16 +62,16 @@ URL="https://github.com/${REPO}/releases/download/${EXPECTED_VERSION}/${PROJECT}
 echo "critical-thinking: installing ${EXPECTED_VERSION} from ${URL}" >&2
 
 mkdir -p "${BIN_DIR}"
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "${TMPDIR}"' EXIT
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "${WORK_DIR}"' EXIT
 
 download_ok=1
 if [[ "${EXT}" == "tar.gz" ]]; then
-  curl -fsSL "${URL}" | tar -xzC "${TMPDIR}" || download_ok=0
+  curl -fsSL "${URL}" | tar -xzC "${WORK_DIR}" || download_ok=0
 else
-  curl -fsSL -o "${TMPDIR}/release.zip" "${URL}" || download_ok=0
+  curl -fsSL -o "${WORK_DIR}/release.zip" "${URL}" || download_ok=0
   if [[ "${download_ok}" == "1" ]]; then
-    unzip -q "${TMPDIR}/release.zip" -d "${TMPDIR}" || download_ok=0
+    unzip -q "${WORK_DIR}/release.zip" -d "${WORK_DIR}" || download_ok=0
   fi
 fi
 
@@ -84,8 +85,8 @@ if [[ "${download_ok}" == "0" ]]; then
   exit 1
 fi
 
-SRC="${TMPDIR}/${PROJECT}"
-[[ "${OS}" == "windows" ]] && SRC="${TMPDIR}/${PROJECT}.exe"
+SRC="${WORK_DIR}/${PROJECT}"
+[[ "${OS}" == "windows" ]] && SRC="${WORK_DIR}/${PROJECT}.exe"
 
 if [[ ! -f "${SRC}" ]]; then
   echo "critical-thinking: archive did not contain ${SRC}" >&2
