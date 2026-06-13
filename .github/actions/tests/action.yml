@@ -45,6 +45,12 @@ runs:
       shell: bash
       run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
+    - name: plugin lint + tests
+      shell: bash
+      run: |
+        task lint:plugin
+        task test:plugin
+
     - name: test (race + coverage)
       shell: bash
       run: task test-race

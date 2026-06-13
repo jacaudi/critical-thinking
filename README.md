@@ -16,6 +16,8 @@ The single tool is `criticalthinking`. Every call must include the four critical
 go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest
 ```
 
+Or install the **Claude Code plugin** under [`plugins/critical-thinking/`](plugins/critical-thinking/): it auto-installs the server, adds an always-on two-gate verification skill, and a hook that activates it every turn. See [its README](plugins/critical-thinking/README.md).
+
 ## One-call example
 
 Request:
@@ -55,6 +57,7 @@ The server exposes `thinking://current` — a per-session JSON snapshot of the f
 - [docs/configuration.md](docs/configuration.md) — env vars, HTTP endpoints, [logging](docs/configuration.md#logging), CORS, session lifecycle
 - [docs/migration.md](docs/migration.md) — breaking changes since `http-sequential-thinking`
 - [docs/development.md](docs/development.md) — building, testing, debugging with MCP Inspector
+- [plugins/critical-thinking/](plugins/critical-thinking/) — the Claude Code plugin (bundled server install + always-on critical-thinking skill)
 
 ## License
 

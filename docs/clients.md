@@ -34,6 +34,10 @@ claude mcp list
 
 Inside a Claude Code session, `/mcp` shows live status, and the `criticalthinking` tool will appear in tool listings.
 
+### Plugin (bundled install)
+
+Instead of the manual `claude mcp add` above, install the in-repo **Claude Code plugin** ([`plugins/critical-thinking/`](../plugins/critical-thinking/)). It registers the MCP server over stdio (downloading the binary automatically), ships the two-gate critical-thinking verification skill, and adds a hook that activates the skill on every prompt. See the [plugin README](../plugins/critical-thinking/README.md) for install, the HTTP-transport variants, and how to disable the always-on hook.
+
 ## Claude Desktop
 
 `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):

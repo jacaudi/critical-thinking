@@ -2,6 +2,10 @@
 
 Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
 
+## Claude Code plugin re-introduced
+
+Non-breaking. A Claude Code **plugin** now ships in-repo under `plugins/critical-thinking/`, bundling the MCP server (auto-installed via a `SessionStart` hook), a two-gate critical-thinking verification skill, and a `UserPromptSubmit` hook that activates the skill on every prompt. This is additive packaging — the server, its `criticalthinking` tool, schema, and transports are unchanged. It reverses the earlier removal of the plugin scaffolding described below, so the note that "the project is now solely an MCP server" no longer holds. See [`plugins/critical-thinking/README.md`](../plugins/critical-thinking/README.md).
+
 ## v1.8.0 — Config via Viper; `CTHINK_` env prefix
 
 **Breaking (env var renames).** Configuration moved to Viper with the `CTHINK_` prefix:

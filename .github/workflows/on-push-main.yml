@@ -12,6 +12,8 @@ on:
       - '.github/workflows/**'
       - '.github/actions/**'
       - 'Dockerfile*'
+      - 'plugins/**'
+      - 'taskfile.yml'
 
 jobs:
   tests:

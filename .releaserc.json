@@ -36,7 +36,7 @@
       "changelogTitle": "# Changelog"
     }],
     ["@semantic-release/exec", {
-      "prepareCmd": "node scripts/bump-docker-tags.mjs ${nextRelease.version}",
+      "prepareCmd": "node scripts/bump-docker-tags.mjs ${nextRelease.version} && node scripts/bump-plugin-version.mjs ${nextRelease.version}",
       "publishCmd": "goreleaser release --clean --skip=validate"
     }],
     ["@semantic-release/git", {

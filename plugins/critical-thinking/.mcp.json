@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "critical-thinking": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/critical-thinking",
+      "args": ["serve"]
+    }
+  }
+}

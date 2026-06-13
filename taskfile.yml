@@ -27,6 +27,14 @@ tasks:
   lint:
     cmds:
       - golangci-lint run ./...
+  lint:plugin:
+    cmds:
+      - shellcheck plugins/critical-thinking/hooks/*.sh plugins/critical-thinking/test/*.sh
+      - 'for f in plugins/critical-thinking/.mcp.json plugins/critical-thinking/hooks/hooks.json plugins/critical-thinking/.claude-plugin/plugin.json; do jq -e . "$f" >/dev/null; done'
+  test:plugin:
+    cmds:
+      - bash plugins/critical-thinking/test/install-binary_test.sh
+      - bash plugins/critical-thinking/test/activate_test.sh
   clean:
     cmds:
       - rm -rf bin/ coverage.txt
