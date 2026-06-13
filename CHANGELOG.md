@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.9.0](https://github.com/jacaudi/critical-thinking/compare/v1.8.1...v1.9.0) (2026-06-13)
+### Features
+
+* **plugin:** add critical-thinking Claude Code plugin ([#62](https://github.com/jacaudi/critical-thinking/issues/62)) ([63206b2](https://github.com/jacaudi/critical-thinking/commit/63206b267dd4351b30b9bada5f59359d8d2a40ef)), closes [#63](https://github.com/jacaudi/critical-thinking/issues/63)
+
+### Documentation
+
+* clarify the cli pipe is not an MCP integration ([df1e696](https://github.com/jacaudi/critical-thinking/commit/df1e6967308451859a4cf25bd2b77aa57996d2be))
+* sync docs with current engine behavior ([#63](https://github.com/jacaudi/critical-thinking/issues/63)) ([0369b58](https://github.com/jacaudi/critical-thinking/commit/0369b589000b20c6502378f54625ece248bbfa52)), closes [#62](https://github.com/jacaudi/critical-thinking/issues/62)
+
 ## [1.8.1](https://github.com/jacaudi/critical-thinking/compare/v1.8.0...v1.8.1) (2026-06-11)
 ### Bug Fixes
 
