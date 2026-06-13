@@ -87,32 +87,41 @@ The whole project was renamed to align with the discipline it teaches. Specifics
 
 The verbatim description registered on the `criticalthinking` tool was rewritten. Discipline #2 changed from "Rubber-duck narration" to "Thinking out loud." The mechanism is unchanged (first-person, exploratory voice; hedges and self-corrections welcome) but the framing is now: putting half-formed reasoning into words is itself the double-check on it. No field semantics changed; no required fields added or removed. Per the protocol-level treatment of `description.go`, this is a behavior-affecting change for client agents that read the tool description and adjust their voice.
 
-## From `0.6.x` (post-rewrite, prior to optional-field work)
+## From `0.6.x` (post-rewrite)
 
-### `thoughtNumber` and `totalThoughts` are now optional after the first thought
+### `thoughtNumber` and `totalThoughts` are required on every call
 
-- Omit `thoughtNumber` to let the server auto-assign:
-  - **Trunk** thoughts: `len(history)+1`.
-  - **Branch** thoughts (when `branchFromThought` and `branchId` are set): position within the branch (1, 2, 3, …) — **not** a global ordinal.
-  - **Revisions** (when `isRevision` and `revisesThought` are set): next trunk slot.
-- Omit `totalThoughts` to inherit the most recent **trunk** thought's value. Branch thoughts are explicitly skipped during inheritance so a branch's auto-bumped `totalThoughts` cannot contaminate the trunk's running estimate.
-- The first trunk thought of a session must still send `totalThoughts` explicitly; omitting it returns `IsError: true`.
-- Sending values explicitly is still accepted and overrides — useful for unambiguous revisions or when a client treats `thoughtNumber` as a global ordinal.
+Both fields are mandatory on **every** call and must be ≥ 1 — there is no
+auto-assign or inheritance in this Go server. A call that omits either (so it
+unmarshals to `0`) is rejected with `IsError: true`. The only server-side
+adjustment is a clamp: if `thoughtNumber` exceeds `totalThoughts`, the server
+raises `totalThoughts` to equal `thoughtNumber`.
 
-### Response no longer echoes `thoughtNumber` / `totalThoughts` / `nextThoughtNeeded`
+> Earlier docs described an "optional fields" feature (omit `thoughtNumber` to
+> auto-assign, omit `totalThoughts` to inherit) carried over from the
+> TypeScript predecessor. That behavior was never implemented in the Go port;
+> the requirement above is authoritative.
 
-The caller already sent these — echoing them was pure redundancy. The response now contains only:
+### Response includes `thoughtNumber` / `totalThoughts` / `nextThoughtNeeded`
+
+The structured response (`ThoughtResponse`) echoes the call's own
+`thoughtNumber`, `totalThoughts`, and `nextThoughtNeeded` alongside the
+session-derived fields:
 
 ```json
 {
+  "thoughtNumber": N,
+  "totalThoughts": M,
+  "nextThoughtNeeded": true,
   "branches": [...],
-  "thoughtHistoryLength": N,
+  "thoughtHistoryLength": K,
   "sessionConfidence": 0.X,
   "branchConfidences": { ... }
 }
 ```
 
-Read the full per-thought state from the `thinking://current` resource if needed.
+`branchConfidences` is present only when at least one branch exists. Read the
+full per-thought state from the `thinking://current` resource if needed.
 
 ### Binary, server name, and log line renamed to `rubber-ducky-mcp`
 
