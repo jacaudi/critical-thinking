@@ -41,9 +41,17 @@ The inspector lets you call `criticalthinking` interactively, watch the rendered
 
 ```
 .
-├── cmd/critical-thinking/
-│   ├── main.go                   # MCP transport adapter (stdio + HTTP)
-│   └── main_test.go              # cross-session isolation integration test
+├── cmd/critical-thinking/        # Cobra command tree + MCP/CLI adapters
+│   ├── main.go                   # entry point: builds the root command, maps errors to exit codes
+│   ├── root.go                   # root command, persistent --verbose/--log-format flags
+│   ├── serve.go                  # `serve` command: stdio vs --http path selection
+│   ├── mcpserver.go              # MCP server wiring (stdio + Streamable HTTP), CORS/CSRF, /health
+│   ├── cli.go                    # `cli` command: NDJSON stdin→stdout, no MCP host
+│   ├── config.go                 # Viper config (CTHINK_ prefix), httpConfig
+│   ├── logging.go                # slog logger construction (text|json → stderr)
+│   ├── schema.go                 # `schema` command: prints the tool contract
+│   ├── version.go                # `version` command + --version text
+│   └── *_test.go                 # command + integration tests (cross-session isolation, etc.)
 ├── internal/thinking/
 │   ├── description.go            # tool description (the prompt-engineering contract)
 │   ├── schema.go                 # ThoughtData / ThoughtResponse + Validate()
@@ -52,7 +60,9 @@ The inspector lets you call `criticalthinking` interactively, watch the rendered
 ├── Dockerfile                    # multi-stage, distroless final
 ```
 
-The `internal/thinking` package has zero dependency on the MCP SDK — `cmd/critical-thinking/main.go` is the only adapter. That keeps the state machine fully unit-testable.
+The `internal/thinking` package has zero dependency on the MCP SDK — the
+`cmd/critical-thinking` package is the only adapter. That keeps the state
+machine fully unit-testable.
 
 ## Release workflow
 

@@ -35,10 +35,13 @@ Request:
 Response (`structuredContent`):
 
 ```json
-{ "branches": [], "thoughtHistoryLength": 1, "sessionConfidence": 0.6 }
+{
+  "thoughtNumber": 1, "totalThoughts": 3, "nextThoughtNeeded": true,
+  "branches": [], "thoughtHistoryLength": 1, "sessionConfidence": 0.6
+}
 ```
 
-The `text` content is a rendered transcript in first-person, exploratory voice. Subsequent calls can omit `thoughtNumber` (auto-assigned) and `totalThoughts` (inherited). Keep each field to one tight sentence — the tool description asks for that brevity; the server does not enforce a hard limit. The full contract lives in the tool description itself.
+The `text` content is a rendered transcript in first-person, exploratory voice. Every call must send `thoughtNumber` and `totalThoughts` (both required, ≥ 1); if `thoughtNumber` exceeds `totalThoughts` the server raises `totalThoughts` to match. Keep each field to one tight sentence — the tool description asks for that brevity; the server does not enforce a hard limit. The full contract lives in the tool description itself.
 
 ## Resources
 
