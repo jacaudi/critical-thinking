@@ -63,8 +63,10 @@ new_root; stub_success
 printf 'old\n' > "${ROOT}/bin/.installed-version"
 bash "${SCRIPT}"; rc=$?
 check "mismatch downloads new binary" 0 "${rc}"
-[[ -x "${ROOT}/bin/critical-thinking" ]] && echo "ok   - binary installed" && PASS=$((PASS+1)) || { echo "FAIL - binary missing"; FAIL=$((FAIL+1)); }
-[[ "$(cat "${ROOT}/bin/.installed-version" 2>/dev/null)" == "${EXPECTED}" ]] && echo "ok   - installed-version recorded" && PASS=$((PASS+1)) || { echo "FAIL - installed-version not recorded"; FAIL=$((FAIL+1)); }
+if [[ -x "${ROOT}/bin/critical-thinking" ]]; then echo "ok   - binary installed"; PASS=$((PASS+1));
+else echo "FAIL - binary missing"; FAIL=$((FAIL+1)); fi
+if [[ "$(cat "${ROOT}/bin/.installed-version" 2>/dev/null)" == "${EXPECTED}" ]]; then echo "ok   - installed-version recorded"; PASS=$((PASS+1));
+else echo "FAIL - installed-version not recorded"; FAIL=$((FAIL+1)); fi
 
 # Case 3: download fails but an existing binary is kept (exit 0).
 new_root; stub_fail
