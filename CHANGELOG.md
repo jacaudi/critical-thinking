@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.9.1](https://github.com/jacaudi/critical-thinking/compare/v1.9.0...v1.9.1) (2026-06-16)
+### Dependencies
+
+* **deps:** update go module directive to v1.26.4 ([1b476c0](https://github.com/jacaudi/critical-thinking/commit/1b476c075f3d54be1fcb2b0366e1dac22c12999b))
+
 ## [1.9.0](https://github.com/jacaudi/critical-thinking/compare/v1.8.1...v1.9.0) (2026-06-13)
 ### Features
 
