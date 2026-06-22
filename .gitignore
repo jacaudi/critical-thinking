@@ -24,5 +24,6 @@ coverage.txt
 
 # Working/agent-only documents (not committed to repo)
 docs/codebase-review.md
+docs/designs/
 docs/plans/
 docs/prompts/
