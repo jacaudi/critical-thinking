@@ -178,7 +178,7 @@ type ToolResult struct {
 // returned); validation failures produce IsError=true results.
 func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, error) {
 	if err := td.Validate(); err != nil {
-		return errorResult(err), nil
+		return validationErrorResult(err), nil
 	}
 
 	// Resolve the logical episode. Empty means the "default" episode. This is
@@ -347,6 +347,20 @@ func (e *episode) renderFooter(b *strings.Builder, td ThoughtData, sessionConf f
 	}
 	fmt.Fprintf(b, "— session confidence %.2f across %d %s",
 		sessionConf, e.confidenceN, noun)
+}
+
+// validationErrorResult formats a contract-validation failure like errorResult
+// but adds a self-correcting `hint` listing every required field, so the caller
+// can fix the next call without a second rejection. Used ONLY for Validate()
+// failures — not for the state-dependent range errors, where a field checklist
+// would be misleading noise.
+func validationErrorResult(err error) ToolResult {
+	body, _ := json.Marshal(struct {
+		Error  string `json:"error"`
+		Status string `json:"status"`
+		Hint   string `json:"hint"`
+	}{Error: err.Error(), Status: "failed", Hint: requiredFieldsChecklist})
+	return ToolResult{Text: string(body), IsError: true}
 }
 
 // errorResult formats a validation/runtime error in the JS-compatible
