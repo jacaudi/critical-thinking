@@ -76,7 +76,8 @@ line) and read the result back.
 - `critical-thinking cli --json` prints structured `ThoughtResponse` as NDJSON —
   the machine-readable surface for programmatic callers.
 
-History, confidence, and branches accumulate across input lines within one run
+History, confidence, and branches accumulate across input lines that share an
+`episodeId` (absent → the `"default"` episode) within one run
 (the analog of a single stdio MCP session). Every line is processed; the command
 exits non-zero if any line fails. A malformed-JSON line is reported on stderr (in
 both modes). A line the engine rejects (for example a validation error) is
@@ -90,6 +91,10 @@ Each `ThoughtData` line must carry the required fields — `thought`,
 `nextStepRationale` when `nextThoughtNeeded` is `true`. See
 [clients.md#cli-no-mcp-host](clients.md#cli-no-mcp-host) for the full
 field-by-field contract.
+
+- `episodeId` (string, optional): partitions state into independent reasoning
+  episodes. Absent → the shared `"default"` episode. Reuse one value per problem;
+  switch for a new problem. Echoed back in the response.
 
 ## A worked session
 

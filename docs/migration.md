@@ -2,6 +2,25 @@
 
 Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
 
+### Per-episode isolation + self-correcting validation (#32, #65)
+
+Non-breaking, additive.
+
+- **New optional input field `episodeId`** (string). Absent behaves exactly as
+  before (a single `"default"` episode). Tag a stable value per logical problem
+  to isolate independent reasoning; it is echoed back on the response. Up to 64
+  active episodes are retained per connection (LRU); a long-dormant episode
+  beyond that is evicted and restarts fresh on next use (logged at `Warn`) — so
+  an unexpected `thoughtHistoryLength` reset is the cap doing its job, not a bug.
+- **New `hint` field on error results.** Validation failures from the input
+  contract now include `hint` — the full required-field checklist — so callers
+  can self-correct. It appears **only on `Validate()`-path errors**; it is NOT
+  present on the two range errors (`revisesThought`/`branchFromThought` out of
+  range) nor on the SDK's own plain-text missing-property errors. The existing
+  `{error, status:"failed"}` shape is preserved (the field is additive).
+- `sessionConfidence` is now scoped to the current episode rather than the whole
+  connection — trustworthy only when a consistent `episodeId` is reused.
+
 ## Claude Code plugin re-introduced
 
 Non-breaking. A Claude Code **plugin** now ships in-repo under `plugins/critical-thinking/`, bundling the MCP server (auto-installed via a `SessionStart` hook), a two-gate critical-thinking verification skill, and a `UserPromptSubmit` hook that activates the skill on every prompt. This is additive packaging — the server, its `criticalthinking` tool, schema, and transports are unchanged. It reverses the earlier removal of the plugin scaffolding described below, so the note that "the project is now solely an MCP server" no longer holds. See [`plugins/critical-thinking/README.md`](../plugins/critical-thinking/README.md).
