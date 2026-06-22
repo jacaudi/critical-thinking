@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.10.0](https://github.com/jacaudi/critical-thinking/compare/v1.9.0...v1.10.0) (2026-06-22)
+### Features
+
+* per-episode isolation + input-contract hardening ([#32](https://github.com/jacaudi/critical-thinking/issues/32), [#65](https://github.com/jacaudi/critical-thinking/issues/65)) ([c645f93](https://github.com/jacaudi/critical-thinking/commit/c645f93627772d102ccc69d5f7fa7df9586f0460))
+
+### Dependencies
+
+* **deps:** update go module directive to v1.26.4 ([1b476c0](https://github.com/jacaudi/critical-thinking/commit/1b476c075f3d54be1fcb2b0366e1dac22c12999b))
+
 ## [1.9.1](https://github.com/jacaudi/critical-thinking/compare/v1.9.0...v1.9.1) (2026-06-16)
 ### Dependencies
 
