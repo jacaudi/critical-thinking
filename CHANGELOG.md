@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.10.1](https://github.com/jacaudi/critical-thinking/compare/v1.10.0...v1.10.1) (2026-06-22)
+### Dependencies
+
+* **deps:** update golang:1.26-alpine docker digest to 3ad5730 ([#55](https://github.com/jacaudi/critical-thinking/issues/55)) ([3009b10](https://github.com/jacaudi/critical-thinking/commit/3009b1007d5d998d0aec08a68cf1b2bc7ea60c47))
+
 ## [1.10.0](https://github.com/jacaudi/critical-thinking/compare/v1.9.0...v1.10.0) (2026-06-22)
 ### Features
 
