@@ -51,6 +51,18 @@ Between the two gates, continue to use extended thinking for any non-trivial rea
 
 ---
 
+## Isolate each task with a stable episodeId
+
+Pass a stable `episodeId` (any string — e.g. a short slug for the current task)
+and **reuse it for both gates of the same prompt**. This keeps a task's intent
+and result verification together and isolated from other tasks, other prompts,
+and other projects sharing the same MCP connection. Without it, every call lands
+in one shared "default" episode and `sessionConfidence` / history are averaged
+across unrelated reasoning. Start a new `episodeId` when you move to an
+unrelated task.
+
+---
+
 ## Tool Failure Protocol
 
 **If `criticalthinking` is unavailable at any point — HALT IMMEDIATELY.**

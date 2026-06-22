@@ -43,6 +43,10 @@ Response (`structuredContent`):
 }
 ```
 
+Pass an optional `episodeId` (any string) to keep independent lines of reasoning
+isolated; reuse it within a problem and switch it for a new one. `sessionConfidence`
+is the mean over the current episode's trunk thoughts.
+
 The `text` content is a rendered transcript in first-person, exploratory voice. Every call must send `thoughtNumber` and `totalThoughts` (both required, ≥ 1); if `thoughtNumber` exceeds `totalThoughts` the server raises `totalThoughts` to match. Keep each field to one tight sentence — the tool description asks for that brevity; the server does not enforce a hard limit. The full contract lives in the tool description itself.
 
 ## Resources

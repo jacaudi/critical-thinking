@@ -25,6 +25,16 @@ fuses three disciplines:
 Sequential thinking is the *spine*. Thinking out loud is the *voice*. Critical
 self-examination is the *check*. Skipping any one of them is a misuse.
 
+Required fields — ` + requiredFieldsChecklist + `
+
+Isolating episodes:
+  - Tag each independent line of reasoning with a stable episodeId (any string).
+    Reuse the same episodeId for every thought in one problem; switch to a new
+    one when you start an unrelated problem. Omitting it routes to a shared
+    "default" episode — fine for a single line of reasoning, but parallel
+    subagents or unrelated problems then contaminate each other's history and
+    confidence. episodeId is echoed back so you can confirm routing.
+
 How a session unfolds:
 
   - You start at thoughtNumber=1 with an estimated totalThoughts. Each call
@@ -80,7 +90,8 @@ Anti-patterns to avoid:
 
 What you get back:
   - A narrated transcript of this thought (first-person, exploratory voice).
-  - Running session confidence (mean of trunk thoughts).
+  - Running session confidence — the mean over the current episode's trunk
+    thoughts. Trustworthy only when you reuse a consistent episodeId.
   - Per-branch confidence (if any branches exist).
   - The full state needed to plan the next call.
 

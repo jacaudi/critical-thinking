@@ -29,6 +29,11 @@ type ThoughtData struct {
 	Critique          string   `json:"critique"`
 	CounterArgument   string   `json:"counterArgument"`
 	NextStepRationale string   `json:"nextStepRationale,omitempty"`
+
+	// EpisodeID partitions state into independent logical reasoning episodes
+	// within one transport session. Empty means the "default" episode.
+	// Any string is valid, so it is not checked in Validate().
+	EpisodeID string `json:"episodeId,omitempty"`
 }
 
 // ThoughtResponse is the structuredContent of a criticalthinking tool call.
@@ -40,7 +45,17 @@ type ThoughtResponse struct {
 	ThoughtHistoryLength int                `json:"thoughtHistoryLength"`
 	SessionConfidence    float64            `json:"sessionConfidence"`
 	BranchConfidences    map[string]float64 `json:"branchConfidences,omitempty"`
+	// EpisodeID echoes the resolved episode ("default" when none was sent) so
+	// the caller can confirm which episode this thought was routed to.
+	EpisodeID string `json:"episodeId"`
 }
+
+// requiredFieldsChecklist is the one-line input-contract summary, shared by the
+// tool description's lead-in (description.go) and the validation-error hint
+// (server.go) so the two cannot drift. It is the single source of truth for the
+// required-field set; a change here updates both consumers. (DRY: one piece of
+// knowledge — what every call must send — one representation.)
+const requiredFieldsChecklist = "Every call requires: thought, thoughtNumber, totalThoughts, nextThoughtNeeded, confidence, assumptions, critique, counterArgument — plus nextStepRationale whenever nextThoughtNeeded=true."
 
 // Validate enforces every wire-format rule for ThoughtData except those that
 // require knowing the current session state (RevisesThought / BranchFromThought
