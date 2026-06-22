@@ -1,13 +1,42 @@
 package thinking
 
 import (
+	"container/list"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 )
+
+// defaultMaxEpisodes bounds the number of logical episodes retained per server.
+// The least-recently-used episode is evicted when a new episode exceeds it.
+const defaultMaxEpisodes = 64
+
+// episode holds the state of one logical reasoning episode. The fields were
+// previously flat on SequentialThinkingServer; they now live per-episode so
+// independent reasoning episodes within one transport session do not
+// contaminate each other's history, confidence, or branches.
+type episode struct {
+	thoughtHistory []ThoughtData
+	branches       map[string][]ThoughtData
+	confidenceSum  float64
+	confidenceN    int
+	branchConfSum  map[string]float64
+	branchConfN    map[string]int
+	lastAccessed   time.Time
+}
+
+func newEpisode() *episode {
+	return &episode{
+		branches:      make(map[string][]ThoughtData),
+		branchConfSum: make(map[string]float64),
+		branchConfN:   make(map[string]int),
+		lastAccessed:  time.Now(),
+	}
+}
 
 // SequentialThinkingServer holds the per-session state for one client of the
 // criticalthinking tool. Construct exactly one per session: in HTTP mode this
@@ -18,51 +47,120 @@ import (
 // is intentionally no map keyed by session-id anywhere — the closure scope is
 // the only addressable path to a session's state.
 type SequentialThinkingServer struct {
-	mu             sync.Mutex
-	thoughtHistory []ThoughtData
-	branches       map[string][]ThoughtData
-	confidenceSum  float64
-	confidenceN    int
-	branchConfSum  map[string]float64
-	branchConfN    map[string]int
-	lastAccessed   time.Time
+	mu sync.Mutex
+	// episodes partitions state by a client-supplied episodeId tool argument.
+	//
+	// Compatible divergence from the rubber-ducky design: this map is keyed by
+	// a CLIENT-SUPPLIED TOOL ARGUMENT (episodeId), scoped WITHIN this single
+	// transport session's closure — NOT by mcp-session-id. One connection still
+	// cannot address another connection's state, so the cross-session isolation
+	// invariant (TestCrossSessionIsolation) is untouched.
+	episodes    map[string]*episode
+	lru         *list.List               // front = most-recently-used; Value = episodeId string
+	lruIndex    map[string]*list.Element // episodeId -> its lru element
+	maxEpisodes int
 }
 
-// NewServer returns an empty SequentialThinkingServer.
+// NewServer returns an empty SequentialThinkingServer bounded to
+// defaultMaxEpisodes logical episodes.
 func NewServer() *SequentialThinkingServer {
+	return newServerWithMax(defaultMaxEpisodes)
+}
+
+// newServerWithMax returns an empty server with a custom episode cap. Tests use
+// a small cap to exercise LRU eviction deterministically.
+func newServerWithMax(max int) *SequentialThinkingServer {
 	return &SequentialThinkingServer{
-		branches:      make(map[string][]ThoughtData),
-		branchConfSum: make(map[string]float64),
-		branchConfN:   make(map[string]int),
-		lastAccessed:  time.Now(),
+		episodes:    make(map[string]*episode),
+		lru:         list.New(),
+		lruIndex:    make(map[string]*list.Element),
+		maxEpisodes: max,
 	}
 }
 
-// HistoryLength returns the number of thoughts in the trunk + branches
-// (a single append-only log).
+// getOrCreateEpisodeLocked returns the episode for id, creating it if absent.
+// Every access (found or created) marks the episode most-recently-used so
+// active episodes are not evicted. Creating a new episode that pushes the count
+// over maxEpisodes evicts the least-recently-used episode. Caller holds s.mu.
+func (s *SequentialThinkingServer) getOrCreateEpisodeLocked(id string) *episode {
+	if elem, ok := s.lruIndex[id]; ok {
+		s.lru.MoveToFront(elem)
+		return s.episodes[id]
+	}
+
+	ep := newEpisode()
+	s.episodes[id] = ep
+	s.lruIndex[id] = s.lru.PushFront(id)
+
+	if len(s.episodes) > s.maxEpisodes {
+		s.evictLRULocked()
+	}
+	return ep
+}
+
+// evictLRULocked removes the least-recently-used episode (the lru back element).
+// Caller holds s.mu.
+func (s *SequentialThinkingServer) evictLRULocked() {
+	back := s.lru.Back()
+	if back == nil {
+		return
+	}
+	evictedKey := back.Value.(string)
+	evictedLen := len(s.episodes[evictedKey].thoughtHistory)
+
+	s.lru.Remove(back)
+	delete(s.episodes, evictedKey)
+	delete(s.lruIndex, evictedKey)
+
+	slog.Warn("evicted least-recently-used thinking episode",
+		"episodeId", evictedKey,
+		"thoughtHistoryLength", evictedLen,
+		"maxEpisodes", s.maxEpisodes)
+}
+
+// defaultEpisodeLocked returns the "default" episode without creating it or
+// touching the LRU order, so informational accessors stay side-effect-free.
+// Returns nil when the default episode does not exist yet. Caller holds s.mu.
+func (s *SequentialThinkingServer) defaultEpisodeLocked() *episode {
+	return s.episodes["default"]
+}
+
+// HistoryLength returns the number of thoughts in the default episode's trunk +
+// branches (a single append-only log). Side-effect-free read.
 func (s *SequentialThinkingServer) HistoryLength() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.thoughtHistory)
+	ep := s.defaultEpisodeLocked()
+	if ep == nil {
+		return 0
+	}
+	return len(ep.thoughtHistory)
 }
 
-// SessionConfidence returns the running mean confidence over trunk thoughts.
-// Returns 0 when no trunk thoughts have been recorded.
+// SessionConfidence returns the running mean confidence over the default
+// episode's trunk thoughts. Returns 0 when no trunk thoughts have been
+// recorded. Side-effect-free read.
 func (s *SequentialThinkingServer) SessionConfidence() float64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.confidenceN == 0 {
+	ep := s.defaultEpisodeLocked()
+	if ep == nil || ep.confidenceN == 0 {
 		return 0
 	}
-	return s.confidenceSum / float64(s.confidenceN)
+	return ep.confidenceSum / float64(ep.confidenceN)
 }
 
-// LastAccessed returns the time of the last successful ProcessThought call.
-// Used by the HTTP idle-timeout cleanup goroutine in main.go.
+// LastAccessed returns the time of the last successful ProcessThought call on
+// the default episode. Informational only — HTTP idle-session lifecycle is
+// driven by the SDK's SessionTimeout, not by this value. Side-effect-free read.
 func (s *SequentialThinkingServer) LastAccessed() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.lastAccessed
+	ep := s.defaultEpisodeLocked()
+	if ep == nil {
+		return time.Time{}
+	}
+	return ep.lastAccessed
 }
 
 // ToolResult is the package-internal return type from ProcessThought. main.go
@@ -83,60 +181,70 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 		return errorResult(err), nil
 	}
 
+	// Resolve the logical episode. Empty means the "default" episode. This is
+	// done here, not in Validate(), so Validate() stays state-free.
+	episodeID := td.EpisodeID
+	if episodeID == "" {
+		episodeID = "default"
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Cross-field validation against state.
-	if td.RevisesThought != nil && *td.RevisesThought > len(s.thoughtHistory) {
+	ep := s.getOrCreateEpisodeLocked(episodeID)
+
+	// Cross-field validation against the EPISODE's state.
+	if td.RevisesThought != nil && *td.RevisesThought > len(ep.thoughtHistory) {
 		return errorResult(fmt.Errorf("revisesThought %d out of range (history length %d)",
-			*td.RevisesThought, len(s.thoughtHistory))), nil
+			*td.RevisesThought, len(ep.thoughtHistory))), nil
 	}
-	if td.BranchFromThought != nil && *td.BranchFromThought > len(s.thoughtHistory) {
+	if td.BranchFromThought != nil && *td.BranchFromThought > len(ep.thoughtHistory) {
 		return errorResult(fmt.Errorf("branchFromThought %d out of range (history length %d)",
-			*td.BranchFromThought, len(s.thoughtHistory))), nil
+			*td.BranchFromThought, len(ep.thoughtHistory))), nil
 	}
 
 	if td.ThoughtNumber > td.TotalThoughts {
 		td.TotalThoughts = td.ThoughtNumber
 	}
 
-	s.thoughtHistory = append(s.thoughtHistory, td)
-	s.lastAccessed = time.Now()
+	ep.thoughtHistory = append(ep.thoughtHistory, td)
+	ep.lastAccessed = time.Now()
 
 	if td.BranchFromThought != nil && td.BranchID != "" {
-		s.branches[td.BranchID] = append(s.branches[td.BranchID], td)
+		ep.branches[td.BranchID] = append(ep.branches[td.BranchID], td)
 	}
 
 	onBranch := td.BranchFromThought != nil && td.BranchID != ""
 	if onBranch {
-		s.branchConfSum[td.BranchID] += td.Confidence
-		s.branchConfN[td.BranchID]++
+		ep.branchConfSum[td.BranchID] += td.Confidence
+		ep.branchConfN[td.BranchID]++
 	} else {
-		s.confidenceSum += td.Confidence
-		s.confidenceN++
+		ep.confidenceSum += td.Confidence
+		ep.confidenceN++
 	}
 
 	var branchConf map[string]float64
-	if len(s.branchConfN) > 0 {
-		branchConf = make(map[string]float64, len(s.branchConfN))
-		for k, n := range s.branchConfN {
-			branchConf[k] = s.branchConfSum[k] / float64(n)
+	if len(ep.branchConfN) > 0 {
+		branchConf = make(map[string]float64, len(ep.branchConfN))
+		for k, n := range ep.branchConfN {
+			branchConf[k] = ep.branchConfSum[k] / float64(n)
 		}
 	}
 
 	sessionConf := 0.0
-	if s.confidenceN > 0 {
-		sessionConf = s.confidenceSum / float64(s.confidenceN)
+	if ep.confidenceN > 0 {
+		sessionConf = ep.confidenceSum / float64(ep.confidenceN)
 	}
 
 	resp := ThoughtResponse{
 		ThoughtNumber:        td.ThoughtNumber,
 		TotalThoughts:        td.TotalThoughts,
 		NextThoughtNeeded:    *td.NextThoughtNeeded,
-		Branches:             sortedKeys(s.branches),
-		ThoughtHistoryLength: len(s.thoughtHistory),
+		Branches:             sortedKeys(ep.branches),
+		ThoughtHistoryLength: len(ep.thoughtHistory),
 		SessionConfidence:    sessionConf,
 		BranchConfidences:    branchConf,
+		EpisodeID:            episodeID,
 	}
 
 	structured, err := json.Marshal(resp)
@@ -146,18 +254,18 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 	}
 
 	return ToolResult{
-		Text:           s.renderTranscriptLocked(td, sessionConf),
+		Text:           ep.renderTranscript(td, sessionConf),
 		StructuredJSON: string(structured),
 		IsError:        false,
 	}, nil
 }
 
-// renderTranscriptLocked builds the narrated transcript text for one thought.
-// Caller must hold s.mu.
-func (s *SequentialThinkingServer) renderTranscriptLocked(td ThoughtData, sessionConf float64) string {
+// renderTranscript builds the narrated transcript text for one thought.
+// Caller must hold s.mu (the episode is reached only through the locked server).
+func (e *episode) renderTranscript(td ThoughtData, sessionConf float64) string {
 	var b strings.Builder
 
-	header := s.headerLineLocked(td)
+	header := e.headerLine(td)
 	fmt.Fprintf(&b, "%s\n\n", header)
 	fmt.Fprintln(&b, td.Thought)
 	fmt.Fprintln(&b)
@@ -182,21 +290,21 @@ func (s *SequentialThinkingServer) renderTranscriptLocked(td ThoughtData, sessio
 		fmt.Fprintf(&b, "  Next, I want to: %s\n\n", td.NextStepRationale)
 	}
 
-	s.renderFooterLocked(&b, td, sessionConf)
+	e.renderFooter(&b, td, sessionConf)
 	return b.String()
 }
 
-// headerLineLocked picks one of four header forms based on revision/branch state.
+// headerLine picks one of four header forms based on revision/branch state.
 // Caller must hold s.mu.
-func (s *SequentialThinkingServer) headerLineLocked(td ThoughtData) string {
+func (e *episode) headerLine(td ThoughtData) string {
 	switch {
 	case td.IsRevision != nil && *td.IsRevision && td.RevisesThought != nil:
 		return fmt.Sprintf("Revision of thought %d (now thought %d) · confidence %.2f",
 			*td.RevisesThought, td.ThoughtNumber, td.Confidence)
 	case td.BranchFromThought != nil && td.BranchID != "":
 		// First-in-branch vs subsequent: count the current branch's depth.
-		// At this point the new thought has already been appended to s.branches[BranchID].
-		depth := len(s.branches[td.BranchID])
+		// At this point the new thought has already been appended to e.branches[BranchID].
+		depth := len(e.branches[td.BranchID])
 		if depth <= 1 {
 			return fmt.Sprintf("Branch '%s' from thought %d · confidence %.2f",
 				td.BranchID, *td.BranchFromThought, td.Confidence)
@@ -209,15 +317,15 @@ func (s *SequentialThinkingServer) headerLineLocked(td ThoughtData) string {
 	}
 }
 
-// renderFooterLocked writes either the trunk or branch+trunk footer.
+// renderFooter writes either the trunk or branch+trunk footer.
 // Caller must hold s.mu.
-func (s *SequentialThinkingServer) renderFooterLocked(b *strings.Builder, td ThoughtData, sessionConf float64) {
+func (e *episode) renderFooter(b *strings.Builder, td ThoughtData, sessionConf float64) {
 	onBranch := td.BranchFromThought != nil && td.BranchID != ""
 	if onBranch {
-		bn := s.branchConfN[td.BranchID]
+		bn := e.branchConfN[td.BranchID]
 		bc := 0.0
 		if bn > 0 {
-			bc = s.branchConfSum[td.BranchID] / float64(bn)
+			bc = e.branchConfSum[td.BranchID] / float64(bn)
 		}
 		bnoun := "thought"
 		if bn != 1 {
@@ -226,19 +334,19 @@ func (s *SequentialThinkingServer) renderFooterLocked(b *strings.Builder, td Tho
 		fmt.Fprintf(b, "— branch '%s' confidence %.2f across %d %s\n",
 			td.BranchID, bc, bn, bnoun)
 		tnoun := "thought"
-		if s.confidenceN != 1 {
+		if e.confidenceN != 1 {
 			tnoun = "thoughts"
 		}
 		fmt.Fprintf(b, "— session confidence (trunk) %.2f across %d %s",
-			sessionConf, s.confidenceN, tnoun)
+			sessionConf, e.confidenceN, tnoun)
 		return
 	}
 	noun := "thought"
-	if s.confidenceN != 1 {
+	if e.confidenceN != 1 {
 		noun = "thoughts"
 	}
 	fmt.Fprintf(b, "— session confidence %.2f across %d %s",
-		sessionConf, s.confidenceN, noun)
+		sessionConf, e.confidenceN, noun)
 }
 
 // errorResult formats a validation/runtime error in the JS-compatible
@@ -270,17 +378,26 @@ type HistorySnapshot struct {
 
 // Snapshot returns the current state for the thinking://current resource.
 // The returned slices and map are safe to mutate without affecting the server.
+//
+// The resource intentionally exposes only the "default" episode: surfacing
+// per-episode state through this resource would risk the same cross-exposure
+// the resource handler already guards against. Side-effect-free read.
 func (s *SequentialThinkingServer) Snapshot() HistorySnapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	thoughts := make([]ThoughtData, len(s.thoughtHistory))
-	copy(thoughts, s.thoughtHistory)
+	ep := s.defaultEpisodeLocked()
+	if ep == nil {
+		return HistorySnapshot{Thoughts: []ThoughtData{}}
+	}
+
+	thoughts := make([]ThoughtData, len(ep.thoughtHistory))
+	copy(thoughts, ep.thoughtHistory)
 
 	var branches map[string][]ThoughtData
-	if len(s.branches) > 0 {
-		branches = make(map[string][]ThoughtData, len(s.branches))
-		for k, v := range s.branches {
+	if len(ep.branches) > 0 {
+		branches = make(map[string][]ThoughtData, len(ep.branches))
+		for k, v := range ep.branches {
 			cp := make([]ThoughtData, len(v))
 			copy(cp, v)
 			branches[k] = cp

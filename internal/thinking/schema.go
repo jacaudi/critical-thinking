@@ -29,6 +29,11 @@ type ThoughtData struct {
 	Critique          string   `json:"critique"`
 	CounterArgument   string   `json:"counterArgument"`
 	NextStepRationale string   `json:"nextStepRationale,omitempty"`
+
+	// EpisodeID partitions state into independent logical reasoning episodes
+	// within one transport session. Empty means the "default" episode.
+	// Any string is valid, so it is not checked in Validate().
+	EpisodeID string `json:"episodeId,omitempty"`
 }
 
 // ThoughtResponse is the structuredContent of a criticalthinking tool call.
@@ -40,6 +45,9 @@ type ThoughtResponse struct {
 	ThoughtHistoryLength int                `json:"thoughtHistoryLength"`
 	SessionConfidence    float64            `json:"sessionConfidence"`
 	BranchConfidences    map[string]float64 `json:"branchConfidences,omitempty"`
+	// EpisodeID echoes the resolved episode ("default" when none was sent) so
+	// the caller can confirm which episode this thought was routed to.
+	EpisodeID string `json:"episodeId"`
 }
 
 // Validate enforces every wire-format rule for ThoughtData except those that
