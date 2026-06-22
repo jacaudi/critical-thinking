@@ -68,3 +68,20 @@ func TestRangeErrorOmitsHint(t *testing.T) {
 		t.Errorf("range error must not carry a hint; got %q", p.Hint)
 	}
 }
+
+func TestToolDescriptionContractGuards(t *testing.T) {
+	for _, want := range []string{
+		requiredFieldsChecklist,   // front-loaded checklist (single source)
+		"episodeId",               // isolation discipline is documented
+		"unrelated problem",       // the episodeId switch guidance
+		"current episode's trunk", // corrected per-episode confidence line (substring chosen to survive the line-wrap in the description text)
+	} {
+		if !strings.Contains(ToolDescription, want) {
+			t.Errorf("ToolDescription missing %q", want)
+		}
+	}
+	// The stale connection-wide confidence phrasing must be gone.
+	if strings.Contains(ToolDescription, "(mean of trunk thoughts)") {
+		t.Error("ToolDescription still has the pre-episode confidence phrasing")
+	}
+}
