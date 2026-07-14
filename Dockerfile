@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 go build \
     -o /out/critical-thinking ./cmd/critical-thinking
 
 # ---- final ----
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:a9329520abc449e3b14d5bc3a6ffae065bdde0f02667fa10880c49b35c109fd1 AS release
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:aef9602f8710ec12bde19d593fed1f76c708531bb7aba205110f1029786ead7b AS release
 
 COPY --from=builder /out/critical-thinking /critical-thinking
 
