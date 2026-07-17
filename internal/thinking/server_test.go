@@ -425,6 +425,38 @@ func TestSnapshotIncludesBranches(t *testing.T) {
 	}
 }
 
+func validInputEpisode(num int, episodeID string) ThoughtData {
+	td := validInput(num)
+	td.EpisodeID = episodeID
+	return td
+}
+
+func TestOnEvictFiresOncePerEviction(t *testing.T) {
+	s := newServerWithMax(1)
+	var evictions int
+	s.OnEvict = func() { evictions++ }
+
+	if _, err := s.ProcessThought(validInputEpisode(1, "ep-1")); err != nil {
+		t.Fatal(err)
+	}
+	if evictions != 0 {
+		t.Fatalf("evictions = %d before cap exceeded, want 0", evictions)
+	}
+	// Second distinct episode exceeds maxEpisodes=1 → evicts ep-1.
+	if _, err := s.ProcessThought(validInputEpisode(1, "ep-2")); err != nil {
+		t.Fatal(err)
+	}
+	if evictions != 1 {
+		t.Fatalf("evictions = %d, want 1", evictions)
+	}
+}
+
+func TestOnEvictNilIsSafe(t *testing.T) {
+	s := newServerWithMax(1)
+	_, _ = s.ProcessThought(validInputEpisode(1, "ep-1"))
+	_, _ = s.ProcessThought(validInputEpisode(1, "ep-2")) // must not panic
+}
+
 func TestBranchDualFooter(t *testing.T) {
 	s := NewServer()
 	// Trunk seed
