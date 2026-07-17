@@ -78,7 +78,7 @@ func TestSessionRegistryCountsCreations(t *testing.T) {
 	const n = 50
 	var wg sync.WaitGroup
 	for range n {
-		wg.Go(func() { r.add(thinking.NewServer()) })
+		wg.Go(func() { r.add() })
 	}
 	wg.Wait()
 	if got := r.count(); got != n {
@@ -88,8 +88,8 @@ func TestSessionRegistryCountsCreations(t *testing.T) {
 
 func TestHealthEndpoint(t *testing.T) {
 	registry := newSessionRegistry()
-	registry.add(thinking.NewServer())
-	registry.add(thinking.NewServer())
+	registry.add()
+	registry.add()
 
 	h := makeHealthHandler(registry)
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -262,7 +262,7 @@ func TestCrossSessionIsolation(t *testing.T) {
 	registry := newSessionRegistry()
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		state := thinking.NewServer()
-		registry.add(state)
+		registry.add()
 		return newMCPServer(state)
 	}, nil)
 	mux := http.NewServeMux()
@@ -316,7 +316,7 @@ func TestThinkingCurrentResourceIsPerSession(t *testing.T) {
 	registry := newSessionRegistry()
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		state := thinking.NewServer()
-		registry.add(state)
+		registry.add()
 		return newMCPServer(state)
 	}, nil)
 	mux := http.NewServeMux()

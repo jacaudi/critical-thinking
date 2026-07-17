@@ -75,7 +75,7 @@ func runHTTP(cfg httpConfig, addr string) error {
 
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		state := thinking.NewServer()
-		registry.add(state)
+		registry.add()
 		slog.Debug("http session created", "sessionsCreated", registry.count())
 		return newMCPServer(state)
 	}, &mcp.StreamableHTTPOptions{
@@ -128,9 +128,9 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 		Description: thinking.ToolDescription,
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint:    true,
-			DestructiveHint: ptrFalse(),
+			DestructiveHint: new(false),
 			IdempotentHint:  true,
-			OpenWorldHint:   ptrFalse(),
+			OpenWorldHint:   new(false),
 		},
 	}, makeToolHandler(state))
 
@@ -143,8 +143,6 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 
 	return srv
 }
-
-func ptrFalse() *bool { f := false; return &f }
 
 // makeToolHandler closes over a per-session state and returns the Go SDK's
 // expected handler signature. The second return value (any) becomes the
@@ -208,10 +206,8 @@ type sessionRegistry struct {
 
 func newSessionRegistry() *sessionRegistry { return &sessionRegistry{} }
 
-// add records that a session was created. The *SequentialThinkingServer
-// argument is intentionally not retained (that would pin closed-session state);
-// it is kept in the signature so the call site reads naturally.
-func (r *sessionRegistry) add(*thinking.SequentialThinkingServer) { r.created.Add(1) }
+// add records that a session was created.
+func (r *sessionRegistry) add() { r.created.Add(1) }
 
 func (r *sessionRegistry) count() int { return int(r.created.Load()) }
 
