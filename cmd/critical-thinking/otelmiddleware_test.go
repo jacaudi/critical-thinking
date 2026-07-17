@@ -137,6 +137,47 @@ func findMetric(t *testing.T, rm metricdata.ResourceMetrics, name string) metric
 	return metricdata.Metrics{}
 }
 
+func TestToolSpanCarriesDomainAttributes(t *testing.T) {
+	exp, _ := setupTestTelemetry(t)
+	ts := newTelemetryTestServer(t)
+
+	client := newHTTPClient(t, ts.URL)
+	client.callTool(t, validInputN(3, "otel-domain"))
+
+	var toolSpan *tracetest.SpanStub
+	for _, s := range exp.GetSpans() {
+		if s.Name == "mcp.tools/call" {
+			toolSpan = &s
+			break
+		}
+	}
+	if toolSpan == nil {
+		t.Fatal("no mcp.tools/call span recorded")
+	}
+	attrs := make(map[attribute.Key]attribute.Value, len(toolSpan.Attributes))
+	for _, kv := range toolSpan.Attributes {
+		attrs[kv.Key] = kv.Value
+	}
+	if got := attrs["ct.thought_number"].AsInt64(); got != 3 {
+		t.Errorf("ct.thought_number = %d, want 3", got)
+	}
+	if got := attrs["ct.total_thoughts"].AsInt64(); got != 20 {
+		t.Errorf("ct.total_thoughts = %d, want 20", got)
+	}
+	if got := attrs["ct.confidence"].AsFloat64(); got != 0.5 {
+		t.Errorf("ct.confidence = %v, want 0.5", got)
+	}
+	if attrs["ct.is_revision"].AsBool() || attrs["ct.is_branch"].AsBool() {
+		t.Errorf("is_revision/is_branch should be false for a plain trunk thought")
+	}
+	if got := attrs["ct.history_length"].AsInt64(); got != 1 {
+		t.Errorf("ct.history_length = %d, want 1", got)
+	}
+	if got := attrs["ct.episode_id"].AsString(); got != "default" {
+		t.Errorf("ct.episode_id = %q, want default", got)
+	}
+}
+
 // TestSpansNeverContainReasoningContent enforces the issue #76 hard rule:
 // thought/critique/counterArgument/assumptions/nextStepRationale text must
 // never reach telemetry.

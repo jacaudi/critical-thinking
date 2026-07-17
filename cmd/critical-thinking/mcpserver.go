@@ -18,6 +18,8 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/jacaudi/critical-thinking/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -182,6 +184,15 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 // CallToolResult's structuredContent — we send the parsed ThoughtResponse.
 func makeToolHandler(state *thinking.SequentialThinkingServer) func(context.Context, *mcp.CallToolRequest, thinking.ThoughtData) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, args thinking.ThoughtData) (*mcp.CallToolResult, any, error) {
+		span := trace.SpanFromContext(ctx)
+		span.SetAttributes(
+			attribute.Int("ct.thought_number", args.ThoughtNumber),
+			attribute.Int("ct.total_thoughts", args.TotalThoughts),
+			attribute.Float64("ct.confidence", args.Confidence),
+			attribute.Bool("ct.is_revision", args.IsRevision != nil && *args.IsRevision),
+			attribute.Bool("ct.is_branch", args.BranchFromThought != nil && args.BranchID != ""),
+		)
+
 		res, err := state.ProcessThought(args)
 		if err != nil {
 			return nil, nil, err
@@ -201,6 +212,12 @@ func makeToolHandler(state *thinking.SequentialThinkingServer) func(context.Cont
 			// Should not happen — ProcessThought just produced this JSON.
 			return callResult, nil, nil
 		}
+
+		span.SetAttributes(
+			attribute.Int("ct.history_length", structured.ThoughtHistoryLength),
+			// episodeId is client-controlled: allowed on spans, NEVER on metrics.
+			attribute.String("ct.episode_id", structured.EpisodeID),
+		)
 		return callResult, structured, nil
 	}
 }
