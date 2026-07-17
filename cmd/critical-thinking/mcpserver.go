@@ -154,6 +154,7 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 		Name:    "critical-thinking",
 		Version: version,
 	}, nil)
+	srv.AddReceivingMiddleware(otelMiddleware())
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "criticalthinking",
