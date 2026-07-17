@@ -25,7 +25,7 @@ func newRootCmd() *cobra.Command {
 			"default, or --http for Streamable HTTP). See the subcommands below.",
 		Example: "  critical-thinking serve\n" +
 			"  critical-thinking serve --http :3000\n" +
-			"  critical-thinking cli --json\n" +
+			"  critical-thinking cli\n" +
 			"  critical-thinking schema\n" +
 			"  critical-thinking version",
 		SilenceUsage:  true,

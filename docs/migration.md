@@ -2,6 +2,24 @@
 
 Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
 
+## `cli` always emits JSON; `--json` flag removed
+
+**Breaking (cli invocation).** `critical-thinking cli` now always prints structured
+`ThoughtResponse` NDJSON — the former `--json` behavior is the only output format,
+and the narrated-transcript mode is gone. `cli` is driven over stdio pipes, where
+the machine-readable stream is the only useful surface.
+
+| Old | New |
+|---|---|
+| `critical-thinking cli --json` | `critical-thinking cli` |
+| `critical-thinking cli` (transcript) | removed — output is always NDJSON |
+
+Passing `--json` now fails with `unknown flag: --json`. Error routing follows the
+former `--json` semantics: engine-rejected lines emit their `{error, status:"failed"}`
+JSON to **stdout** (keeping the stream line-aligned); malformed-JSON lines are
+diagnosed on stderr. `version --json` is unaffected. No engine, field, schema, or
+transport behavior changed.
+
 ### Per-episode isolation + self-correcting validation (#32, #65)
 
 Non-breaking, additive.

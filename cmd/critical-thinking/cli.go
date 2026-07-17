@@ -23,8 +23,11 @@ var errCLIFailed = errors.New("cli: one or more input lines failed")
 // One in-memory thinking.NewServer() lives for the call, so history,
 // confidence, and branches accumulate across input lines — the analog of a
 // stdio MCP session. Input is NDJSON: one ThoughtData per non-blank line.
-// Returns 0 if every line succeeded, 1 if any line errored.
-func runCLI(stdin io.Reader, stdout, stderr io.Writer, jsonOut bool) int {
+// Output is NDJSON too: one structured ThoughtResponse per processed line. A
+// line the engine rejects emits its error JSON to stdout so the stream stays
+// line-aligned; malformed-JSON lines are diagnosed on stderr only. Returns 0
+// if every line succeeded, 1 if any line errored.
+func runCLI(stdin io.Reader, stdout, stderr io.Writer) int {
 	state := thinking.NewServer()
 	sc := bufio.NewScanner(stdin)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // tolerate long thoughts
@@ -52,18 +55,10 @@ func runCLI(stdin io.Reader, stdout, stderr io.Writer, jsonOut bool) int {
 		}
 		if res.IsError {
 			failed = true
-			if jsonOut {
-				_, _ = fmt.Fprintln(stdout, res.Text) // error JSON keeps NDJSON aligned
-			} else {
-				_, _ = fmt.Fprintln(stderr, res.Text)
-			}
+			_, _ = fmt.Fprintln(stdout, res.Text) // error JSON keeps NDJSON aligned
 			continue
 		}
-		if jsonOut {
-			_, _ = fmt.Fprintln(stdout, res.StructuredJSON)
-		} else {
-			_, _ = fmt.Fprintf(stdout, "%s\n\n", res.Text)
-		}
+		_, _ = fmt.Fprintln(stdout, res.StructuredJSON)
 	}
 	if err := sc.Err(); err != nil {
 		_, _ = fmt.Fprintf(stderr, "cli: read: %v\n", err)
@@ -75,24 +70,21 @@ func runCLI(stdin io.Reader, stdout, stderr io.Writer, jsonOut bool) int {
 	return 0
 }
 
-// newCliCmd streams NDJSON ThoughtData from stdin through the engine (no MCP).
-// --json emits structured ThoughtResponse NDJSON instead of the transcript.
-// It processes EVERY line, then returns errCLIFailed iff any line failed, so
-// the exit code is 1 without fail-fast (pin 1).
+// newCliCmd streams NDJSON ThoughtData from stdin through the engine (no MCP),
+// emitting one structured ThoughtResponse JSON object per line. It processes
+// EVERY line, then returns errCLIFailed iff any line failed, so the exit code
+// is 1 without fail-fast (pin 1).
 func newCliCmd() *cobra.Command {
-	var jsonOut bool
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "cli",
 		Short: "Stream NDJSON ThoughtData through the engine (no MCP host)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			code := runCLI(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonOut)
+			code := runCLI(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 			if code != 0 {
 				return errCLIFailed
 			}
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit structured ThoughtResponse as NDJSON instead of the transcript")
-	return cmd
 }
