@@ -23,10 +23,8 @@ var errCLIFailed = errors.New("cli: one or more input lines failed")
 // One in-memory thinking.NewServer() lives for the call, so history,
 // confidence, and branches accumulate across input lines — the analog of a
 // stdio MCP session. Input is NDJSON: one ThoughtData per non-blank line.
-// Output is NDJSON too: one structured ThoughtResponse per processed line. A
-// line the engine rejects emits its error JSON to stdout so the stream stays
-// line-aligned; malformed-JSON lines are diagnosed on stderr only. Returns 0
-// if every line succeeded, 1 if any line errored.
+// Output is NDJSON too: one structured ThoughtResponse per processed line.
+// Returns 0 if every line succeeded, 1 if any line errored.
 func runCLI(stdin io.Reader, stdout, stderr io.Writer) int {
 	state := thinking.NewServer()
 	sc := bufio.NewScanner(stdin)
@@ -39,26 +37,9 @@ func runCLI(stdin io.Reader, stdout, stderr io.Writer) int {
 		if len(line) == 0 {
 			continue
 		}
-		var td thinking.ThoughtData
-		// Write errors on stdout/stderr aren't actionable here; the exit code
-		// already reflects per-line success via failed.
-		if err := json.Unmarshal(line, &td); err != nil {
-			_, _ = fmt.Fprintf(stderr, "cli: line %d: %v\n", lineNo, err)
+		if !processOne(state, line, fmt.Sprintf("line %d", lineNo), stdout, stderr) {
 			failed = true
-			continue
 		}
-		res, err := state.ProcessThought(td)
-		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "cli: line %d: %v\n", lineNo, err)
-			failed = true
-			continue
-		}
-		if res.IsError {
-			failed = true
-			_, _ = fmt.Fprintln(stdout, res.Text) // error JSON keeps NDJSON aligned
-			continue
-		}
-		_, _ = fmt.Fprintln(stdout, res.StructuredJSON)
 	}
 	if err := sc.Err(); err != nil {
 		_, _ = fmt.Fprintf(stderr, "cli: read: %v\n", err)
@@ -68,6 +49,34 @@ func runCLI(stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// processOne unmarshals one ThoughtData JSON document from raw, processes it
+// against state, and writes the result — the single source of the per-input
+// contract shared by the stream loop and --once. src labels the input in
+// diagnostics ("line 3", "argument", "stdin"). Success emits StructuredJSON
+// to stdout; an IsError result emits the engine's error JSON to stdout too,
+// so the NDJSON stream stays line-aligned. Malformed input is diagnosed on
+// stderr only. Returns false if the input failed.
+func processOne(state *thinking.SequentialThinkingServer, raw []byte, src string, stdout, stderr io.Writer) bool {
+	var td thinking.ThoughtData
+	// Write errors on stdout/stderr aren't actionable here; the return value
+	// already reflects per-input success.
+	if err := json.Unmarshal(raw, &td); err != nil {
+		_, _ = fmt.Fprintf(stderr, "cli: %s: %v\n", src, err)
+		return false
+	}
+	res, err := state.ProcessThought(td)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "cli: %s: %v\n", src, err)
+		return false
+	}
+	if res.IsError {
+		_, _ = fmt.Fprintln(stdout, res.Text) // error JSON keeps NDJSON aligned
+		return false
+	}
+	_, _ = fmt.Fprintln(stdout, res.StructuredJSON)
+	return true
 }
 
 // newCliCmd streams NDJSON ThoughtData from stdin through the engine (no MCP),
