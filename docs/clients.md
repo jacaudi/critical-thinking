@@ -124,7 +124,7 @@ For browser-based clients, set `CTHINK_ALLOWED_ORIGINS` to permit your origin â€
 ## Docker
 
 ```bash
-docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.12.1
+docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.13.0
 ```
 
 Then use the HTTP client config above. The image binds to `0.0.0.0` automatically (via `CTHINK_HTTP_HOST=0.0.0.0`); pair it with appropriate firewall rules in production.

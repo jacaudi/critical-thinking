@@ -11,7 +11,7 @@ own script feeds it NDJSON). Install once, then pick the path that fits.
 go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest
 
 # Container image (pin to a release tag)
-docker pull ghcr.io/jacaudi/critical-thinking:v1.12.1
+docker pull ghcr.io/jacaudi/critical-thinking:v1.13.0
 ```
 
 Prebuilt binaries for each release are attached to the
@@ -25,7 +25,7 @@ expect); `--http` switches to Streamable HTTP.
 ```bash
 critical-thinking serve                 # stdio (default)
 critical-thinking serve --http :3000    # Streamable HTTP on :3000
-docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.12.1   # HTTP in a container
+docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.13.0   # HTTP in a container
 ```
 
 Register it with Claude Code using the `claude` CLI:

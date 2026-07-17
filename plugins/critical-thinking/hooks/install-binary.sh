@@ -29,7 +29,7 @@ PROJECT="critical-thinking"
 
 # DO NOT EDIT BY HAND. Auto-bumped on every release by semantic-release
 # (scripts/bump-plugin-version.mjs via .releaserc.json @semantic-release/exec).
-EXPECTED_VERSION="v1.12.1"
+EXPECTED_VERSION="v1.13.0"
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")"/.. && pwd)}"
 BIN_DIR="${PLUGIN_ROOT}/bin"
