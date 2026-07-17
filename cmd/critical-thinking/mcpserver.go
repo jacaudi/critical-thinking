@@ -18,6 +18,11 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/jacaudi/critical-thinking/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -88,7 +93,7 @@ func runHTTP(cfg httpConfig, addr string) error {
 
 	srv := &http.Server{
 		Addr:              listenAddr,
-		Handler:           rootHandler,
+		Handler:           otelHTTPHandler(rootHandler),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -144,6 +149,22 @@ func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier, registry *
 	return withCORS(mux, cfg.AllowedOrigins), nil
 }
 
+// otelHTTPHandler wraps the fully-composed HTTP handler (from buildHTTPHandler,
+// which already applies withCORS as its outermost layer) in otelhttp, keeping
+// otelhttp OUTERMOST so CORS/CSRF rejections are traced too. /health is filtered
+// from telemetry — liveness probes would otherwise emit a span every few seconds
+// forever. runHTTP and the HTTP integration test both wrap buildHTTPHandler's
+// output with this.
+func otelHTTPHandler(inner http.Handler) http.Handler {
+	// otelhttp v0.69.0 ignores the operation arg ("mcp") for span naming — its
+	// default names spans from semconv SpanName (method, or method+route, e.g.
+	// "POST /mcp"). WithSpanNameFormatter forces the stable "mcp" name the
+	// design intends (and that the test below asserts).
+	return otelhttp.NewHandler(inner, "mcp",
+		otelhttp.WithSpanNameFormatter(func(string, *http.Request) string { return "mcp" }),
+		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/health" }))
+}
+
 // newMCPServer constructs a configured *mcp.Server with the criticalthinking
 // tool registered. The state argument is captured by the tool handler — this
 // is how per-session isolation works in HTTP mode (each call to this function
@@ -154,6 +175,16 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 		Name:    "critical-thinking",
 		Version: version,
 	}, nil)
+	srv.AddReceivingMiddleware(otelMiddleware())
+
+	meter := otel.Meter(instrumentationScope)
+	sessionsCreated, _ := meter.Int64Counter("ct.sessions.created",
+		metric.WithDescription("MCP server sessions created (monotonic; there is deliberately no active-sessions gauge)"))
+	sessionsCreated.Add(context.Background(), 1)
+
+	episodesEvicted, _ := meter.Int64Counter("ct.episodes.evicted",
+		metric.WithDescription("Thinking episodes evicted by the per-session LRU cap"))
+	state.OnEvict = func() { episodesEvicted.Add(context.Background(), 1) }
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "criticalthinking",
@@ -181,6 +212,15 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 // CallToolResult's structuredContent — we send the parsed ThoughtResponse.
 func makeToolHandler(state *thinking.SequentialThinkingServer) func(context.Context, *mcp.CallToolRequest, thinking.ThoughtData) (*mcp.CallToolResult, any, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, args thinking.ThoughtData) (*mcp.CallToolResult, any, error) {
+		span := trace.SpanFromContext(ctx)
+		span.SetAttributes(
+			attribute.Int("ct.thought_number", args.ThoughtNumber),
+			attribute.Int("ct.total_thoughts", args.TotalThoughts),
+			attribute.Float64("ct.confidence", args.Confidence),
+			attribute.Bool("ct.is_revision", args.IsRevision != nil && *args.IsRevision),
+			attribute.Bool("ct.is_branch", args.BranchFromThought != nil && args.BranchID != ""),
+		)
+
 		res, err := state.ProcessThought(args)
 		if err != nil {
 			return nil, nil, err
@@ -200,6 +240,12 @@ func makeToolHandler(state *thinking.SequentialThinkingServer) func(context.Cont
 			// Should not happen — ProcessThought just produced this JSON.
 			return callResult, nil, nil
 		}
+
+		span.SetAttributes(
+			attribute.Int("ct.history_length", structured.ThoughtHistoryLength),
+			// episodeId is client-controlled: allowed on spans, NEVER on metrics.
+			attribute.String("ct.episode_id", structured.EpisodeID),
+		)
 		return callResult, structured, nil
 	}
 }

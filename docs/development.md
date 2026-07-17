@@ -62,7 +62,10 @@ The inspector lets you call `criticalthinking` interactively, watch the rendered
 
 The `internal/thinking` package has zero dependency on the MCP SDK — the
 `cmd/critical-thinking` package is the only adapter. That keeps the state
-machine fully unit-testable.
+machine fully unit-testable. The same applies to OpenTelemetry: all
+instrumentation lives in `cmd/critical-thinking` (`otel.go`,
+`otelmiddleware.go`); `internal/thinking` exposes only a plain `OnEvict
+func()` callback that the adapter wires to a counter.
 
 ## Release workflow
 

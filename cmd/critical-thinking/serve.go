@@ -1,6 +1,10 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -32,6 +36,22 @@ func newServeCmd(v *viper.Viper) *serveCmd {
 			"serves Streamable HTTP at that address (e.g. --http :3000).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if v.GetBool("otel_enabled") {
+				shutdown, err := setupOTel(cmd.Context())
+				if err != nil {
+					return fmt.Errorf("otel setup: %w", err)
+				}
+				// Flush after the transport exits (for HTTP that is after the
+				// graceful drain in runHTTP). A flush failure is logged, never
+				// returned: telemetry must not fail a clean shutdown.
+				defer func() {
+					sctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+					defer cancel()
+					if err := shutdown(sctx); err != nil {
+						slog.Warn("otel shutdown", "error", err)
+					}
+				}()
+			}
 			if httpAddr != "" {
 				return c.httpRun(httpConfigFromViper(v), httpAddr)
 			}

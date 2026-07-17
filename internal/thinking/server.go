@@ -60,6 +60,12 @@ type SequentialThinkingServer struct {
 	lru         *list.List               // front = most-recently-used; Value = episodeId string
 	lruIndex    map[string]*list.Element // episodeId -> its lru element
 	maxEpisodes int
+	// OnEvict, when non-nil, is called once per LRU episode eviction. Set it
+	// before the server handles its first request. It is invoked with the
+	// server's internal lock held and must not call back into the server.
+	// It is a plain callback so this package stays free of MCP/OTel imports;
+	// cmd/critical-thinking wires it to an OTel counter.
+	OnEvict func()
 }
 
 // NewServer returns an empty SequentialThinkingServer bounded to
@@ -117,6 +123,10 @@ func (s *SequentialThinkingServer) evictLRULocked() {
 		"episodeId", evictedKey,
 		"thoughtHistoryLength", evictedLen,
 		"maxEpisodes", s.maxEpisodes)
+
+	if s.OnEvict != nil {
+		s.OnEvict()
+	}
 }
 
 // defaultEpisodeLocked returns the "default" episode without creating it or

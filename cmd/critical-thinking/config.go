@@ -11,14 +11,15 @@ import (
 // newConfigViper builds the single Viper instance backing all runtime config.
 // Keys use underscores so AutomaticEnv maps them to CTHINK_<KEY> with no
 // key-replacer (e.g. log_format → CTHINK_LOG_FORMAT). The env-only keys
-// (allowed_origins, http_host) resolve via AutomaticEnv; the flag-backed keys
-// (verbose, log_format) are bound separately via bindFlags. Precedence is
-// flag (if changed) > env > default.
+// (allowed_origins, http_host, otel_enabled) resolve via AutomaticEnv; the
+// flag-backed keys (verbose, log_format) are bound separately via bindFlags.
+// Precedence is flag (if changed) > env > default.
 func newConfigViper() *viper.Viper {
 	v := viper.New()
 	v.SetEnvPrefix("CTHINK")
 	v.AutomaticEnv()
 	v.SetDefault("http_host", "127.0.0.1")
+	v.SetDefault("otel_enabled", false)
 	return v
 }
 
