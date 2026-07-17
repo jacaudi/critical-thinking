@@ -123,6 +123,21 @@ func TestHTTPConfigFromViperOIDCTrimsWhitespace(t *testing.T) {
 	}
 }
 
+func TestOtelEnabledDefaultsFalse(t *testing.T) {
+	v := newConfigViper()
+	if v.GetBool("otel_enabled") {
+		t.Fatal("otel_enabled should default to false")
+	}
+}
+
+func TestOtelEnabledFromEnv(t *testing.T) {
+	t.Setenv("CTHINK_OTEL_ENABLED", "true")
+	v := newConfigViper()
+	if !v.GetBool("otel_enabled") {
+		t.Fatal("CTHINK_OTEL_ENABLED=true not picked up")
+	}
+}
+
 func TestValidateAuth(t *testing.T) {
 	tests := []struct {
 		name    string
