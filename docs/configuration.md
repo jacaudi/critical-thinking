@@ -10,6 +10,7 @@
 | `CTHINK_OIDC_AUDIENCE` | (empty) | Expected `aud` claim. **Required when `CTHINK_OIDC_ISSUER` is set** — the server refuses to start otherwise (an empty audience would disable audience validation). |
 | `CTHINK_VERBOSE` | `false` | Enables debug logging (and the stdio JSON-RPC frame trace). Env equivalent of `--verbose`; the flag overrides it. |
 | `CTHINK_LOG_FORMAT` | `text` | Log handler format: `text` or `json`. Env equivalent of `--log-format`; the flag overrides it. |
+| `CTHINK_OTEL_ENABLED` | `false` | Install OpenTelemetry tracer/meter providers (OTLP/HTTP exporters) for `serve`. When false (default), all instrumentation is no-op and no telemetry dependency is active at runtime. |
 
 All config is read through Viper with the `CTHINK_` prefix. For the logging
 settings, precedence is **flag > env > default** (e.g. `--log-format` overrides
@@ -106,3 +107,38 @@ When `CTHINK_OIDC_ISSUER` is set (and `CTHINK_OIDC_AUDIENCE` provided):
 
 Authentication is orthogonal to CORS and the SDK's `CrossOriginProtection`: all three apply
 independently.
+
+## Observability (OpenTelemetry)
+
+Set `CTHINK_OTEL_ENABLED=true` to enable tracing and metrics for `serve`
+(both stdio and HTTP transports). Everything else is standard OTel SDK
+environment configuration — no `CTHINK_OTEL_*` variants exist:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — collector base URL. Default
+  `https://localhost:4318` (OTLP/HTTP). Most local collectors speak
+  plaintext: use an `http://` scheme (e.g. `http://localhost:4318`) or set
+  `OTEL_EXPORTER_OTLP_INSECURE=true`, otherwise you will see TLS handshake
+  warnings on stderr.
+- `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG`, `OTEL_SERVICE_NAME`,
+  `OTEL_RESOURCE_ATTRIBUTES`, and the rest of the standard set are honored
+  by the OTel SDK directly.
+
+Export failures (e.g. no collector running) are logged as warnings on
+stderr and are never fatal; stdout is never touched (in stdio mode it is
+the JSON-RPC channel).
+
+Signals emitted:
+
+| Signal | What |
+|---|---|
+| Span `mcp.<method>` | One server span per JSON-RPC method on both transports; `tools/call` spans carry `mcp.tool.name` and bounded domain attributes (`ct.thought_number`, `ct.total_thoughts`, `ct.confidence`, `ct.is_revision`, `ct.is_branch`, `ct.history_length`, `ct.episode_id`). |
+| HTTP server spans/metrics | From `otelhttp` around `/mcp` (`/health` is excluded). |
+| `ct.mcp.calls` | Counter by `mcp.method` + `ct.outcome` (`ok`/`error`/`tool_error`). |
+| `ct.mcp.duration` | Histogram (seconds) by `mcp.method`. |
+| `ct.sessions.created` | Monotonic sessions-created counter (there is deliberately no active-sessions gauge — the server has no accurate live count by design). |
+| `ct.episodes.evicted` | LRU episode evictions. |
+
+Privacy: the content of `thought`, `assumptions`, `critique`,
+`counterArgument`, and `nextStepRationale` is never attached to any span or
+metric, and `episodeId` never appears as a metric label. This is enforced
+by tests.
