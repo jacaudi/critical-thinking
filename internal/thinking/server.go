@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -240,7 +241,7 @@ func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, e
 		ThoughtNumber:        td.ThoughtNumber,
 		TotalThoughts:        td.TotalThoughts,
 		NextThoughtNeeded:    *td.NextThoughtNeeded,
-		Branches:             sortedKeys(ep.branches),
+		Branches:             slices.Sorted(maps.Keys(ep.branches)),
 		ThoughtHistoryLength: len(ep.thoughtHistory),
 		SessionConfidence:    sessionConf,
 		BranchConfidences:    branchConf,
@@ -372,15 +373,6 @@ func errorResult(err error) ToolResult {
 		Status string `json:"status"`
 	}{Error: err.Error(), Status: "failed"})
 	return ToolResult{Text: string(body), IsError: true}
-}
-
-func sortedKeys(m map[string][]ThoughtData) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
 }
 
 // HistorySnapshot returns a deep copy of the trunk + branch thought history,
