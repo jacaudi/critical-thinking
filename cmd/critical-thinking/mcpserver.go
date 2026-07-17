@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/jacaudi/critical-thinking/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -57,42 +58,37 @@ func runStdio() error {
 // the SDK closes a session we have no callback, so the count drifts upward.
 // /health exposes it as `sessionsCreated` to make the semantics explicit.
 func runHTTP(cfg httpConfig, addr string) error {
-	// Wire the configured allowed origins (CTHINK_ALLOWED_ORIGINS) into the SDK's
-	// CSRF protection so browser clients from those origins aren't rejected by the
-	// SDK's default same-origin policy. Non-browser callers (no Origin /
-	// no Sec-Fetch-Site) are still allowed regardless.
-	csrf := http.NewCrossOriginProtection()
-	for _, o := range cfg.AllowedOrigins {
-		if err := csrf.AddTrustedOrigin(o); err != nil {
-			return fmt.Errorf("invalid CTHINK_ALLOWED_ORIGINS entry %q: %w", o, err)
-		}
+	if err := cfg.validateAuth(); err != nil {
+		return err // fail fast: never bind a port with auth misconfigured
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	registry := newSessionRegistry()
+	var verifier *oidc.IDTokenVerifier
+	if cfg.OIDCIssuer != "" {
+		v, err := newOIDCVerifier(ctx, cfg.OIDCIssuer, cfg.OIDCAudience)
+		if err != nil {
+			return err
+		}
+		verifier = v
+		slog.Info("OIDC authentication ENABLED", "issuer", cfg.OIDCIssuer, "audience", cfg.OIDCAudience)
+	} else {
+		slog.Warn("OIDC authentication DISABLED (CTHINK_OIDC_ISSUER not set); /mcp is unauthenticated")
+	}
 
-	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		state := thinking.NewServer()
-		registry.add()
-		slog.Debug("http session created", "sessionsCreated", registry.count())
-		return newMCPServer(state)
-	}, &mcp.StreamableHTTPOptions{
-		SessionTimeout:        idleTimeout,
-		CrossOriginProtection: csrf,
-	})
+	registry := newSessionRegistry()
+	rootHandler, err := buildHTTPHandler(cfg, verifier, registry)
+	if err != nil {
+		return err
+	}
 
 	// addr like ":3000" already includes the colon; combine with the configured host.
 	listenAddr := cfg.HTTPHost + addr
 
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", handler)
-	mux.HandleFunc("/health", makeHealthHandler(registry))
-
 	srv := &http.Server{
 		Addr:              listenAddr,
-		Handler:           withCORS(mux, cfg.AllowedOrigins),
+		Handler:           rootHandler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -110,6 +106,42 @@ func runHTTP(cfg httpConfig, addr string) error {
 		return fmt.Errorf("listen: %w", err)
 	}
 	return nil
+}
+
+// buildHTTPHandler assembles the full HTTP handler chain and is the single source of truth for the
+// /mcp+/health wiring, called by runHTTP in production and by the integration tests directly.
+// /mcp is wrapped by requireAuth iff verifier != nil; /health is always bare; withCORS is outermost.
+func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier, registry *sessionRegistry) (http.Handler, error) {
+	// Wire the configured allowed origins (CTHINK_ALLOWED_ORIGINS) into the SDK's
+	// CSRF protection so browser clients from those origins aren't rejected by the
+	// SDK's default same-origin policy. Non-browser callers (no Origin /
+	// no Sec-Fetch-Site) are still allowed regardless.
+	csrf := http.NewCrossOriginProtection()
+	for _, o := range cfg.AllowedOrigins {
+		if err := csrf.AddTrustedOrigin(o); err != nil {
+			return nil, fmt.Errorf("invalid CTHINK_ALLOWED_ORIGINS entry %q: %w", o, err)
+		}
+	}
+
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		state := thinking.NewServer()
+		registry.add()
+		slog.Debug("http session created", "sessionsCreated", registry.count())
+		return newMCPServer(state)
+	}, &mcp.StreamableHTTPOptions{
+		SessionTimeout:        idleTimeout,
+		CrossOriginProtection: csrf,
+	})
+
+	var mcpEndpoint http.Handler = handler
+	if verifier != nil {
+		mcpEndpoint = requireAuth(verifier, handler)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", mcpEndpoint)
+	mux.HandleFunc("/health", makeHealthHandler(registry))
+	return withCORS(mux, cfg.AllowedOrigins), nil
 }
 
 // newMCPServer constructs a configured *mcp.Server with the criticalthinking
