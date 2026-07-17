@@ -18,6 +18,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/jacaudi/critical-thinking/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -92,7 +93,7 @@ func runHTTP(cfg httpConfig, addr string) error {
 
 	srv := &http.Server{
 		Addr:              listenAddr,
-		Handler:           rootHandler,
+		Handler:           otelHTTPHandler(rootHandler),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -146,6 +147,22 @@ func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier, registry *
 	mux.Handle("/mcp", mcpEndpoint)
 	mux.HandleFunc("/health", makeHealthHandler(registry))
 	return withCORS(mux, cfg.AllowedOrigins), nil
+}
+
+// otelHTTPHandler wraps the fully-composed HTTP handler (from buildHTTPHandler,
+// which already applies withCORS as its outermost layer) in otelhttp, keeping
+// otelhttp OUTERMOST so CORS/CSRF rejections are traced too. /health is filtered
+// from telemetry — liveness probes would otherwise emit a span every few seconds
+// forever. runHTTP and the HTTP integration test both wrap buildHTTPHandler's
+// output with this.
+func otelHTTPHandler(inner http.Handler) http.Handler {
+	// otelhttp v0.69.0 ignores the operation arg ("mcp") for span naming — its
+	// default names spans from semconv SpanName (method, or method+route, e.g.
+	// "POST /mcp"). WithSpanNameFormatter forces the stable "mcp" name the
+	// design intends (and that the test below asserts).
+	return otelhttp.NewHandler(inner, "mcp",
+		otelhttp.WithSpanNameFormatter(func(string, *http.Request) string { return "mcp" }),
+		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/health" }))
 }
 
 // newMCPServer constructs a configured *mcp.Server with the criticalthinking

@@ -266,3 +266,50 @@ func TestSpansNeverContainReasoningContent(t *testing.T) {
 		}
 	}
 }
+
+// TestOtelHTTPWrapperPreservesStreamingAndEmitsServerSpans drives the full MCP
+// flow through otelHTTPHandler wrapping buildHTTPHandler's output — the exact
+// composition runHTTP uses after #75 — so the otelhttp + (buildHTTPHandler's
+// CORS/CSRF) stack production runs is what this test exercises.
+func TestOtelHTTPWrapperPreservesStreamingAndEmitsServerSpans(t *testing.T) {
+	exp, _ := setupTestTelemetry(t)
+
+	// buildHTTPHandler (from #75) is the single source of truth for the
+	// /mcp+/health+CORS wiring; nil verifier = auth disabled. otelHTTPHandler
+	// wraps its returned handler exactly as runHTTP does.
+	h, err := buildHTTPHandler(httpConfig{}, nil, newSessionRegistry())
+	if err != nil {
+		t.Fatalf("buildHTTPHandler: %v", err)
+	}
+	ts := httptest.NewServer(otelHTTPHandler(h))
+	t.Cleanup(ts.Close)
+
+	// Full MCP flow through the wrapped stack — fails if Flusher is lost.
+	client := newHTTPClient(t, ts.URL)
+	client.callTool(t, validInputN(1, "otelhttp"))
+
+	// /health must NOT produce spans.
+	resp, err := http.Get(ts.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	// otelHTTPHandler passes otelhttp.WithSpanNameFormatter(... return "mcp") —
+	// the operation arg to NewHandler does NOT set the span name in v0.69.0 (its
+	// default derives the name from semconv SpanName: method, or method+route
+	// like "POST /mcp"). The formatter is what forces the stable "mcp" name
+	// this assertion checks.
+	var sawHTTPSpan bool
+	for _, s := range exp.GetSpans() {
+		if s.Name == "mcp" {
+			sawHTTPSpan = true
+		}
+		if strings.Contains(s.Name, "health") {
+			t.Errorf("unexpected span for /health: %q", s.Name)
+		}
+	}
+	if !sawHTTPSpan {
+		t.Error("no otelhttp server span recorded for /mcp traffic")
+	}
+}
