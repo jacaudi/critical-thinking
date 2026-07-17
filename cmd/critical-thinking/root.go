@@ -26,6 +26,7 @@ func newRootCmd() *cobra.Command {
 		Example: "  critical-thinking serve\n" +
 			"  critical-thinking serve --http :3000\n" +
 			"  critical-thinking cli\n" +
+			"  critical-thinking cli --once '<thought-json>'\n" +
 			"  critical-thinking schema\n" +
 			"  critical-thinking version",
 		SilenceUsage:  true,
