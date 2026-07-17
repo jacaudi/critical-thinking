@@ -135,17 +135,16 @@ Run the engine directly, without an MCP client:
 
 ```bash
 # Stream thoughts: one ThoughtData JSON object per line on stdin.
+# Output is structured ThoughtResponse NDJSON: one JSON object per line.
 printf '%s\n' '{"thought":"...","thoughtNumber":1,"totalThoughts":3,"nextThoughtNeeded":true,"confidence":0.6,"assumptions":[],"critique":"...","counterArgument":"...","nextStepRationale":"..."}' \
   | critical-thinking cli
-
-# Structured NDJSON output instead of the transcript:
-... | critical-thinking cli --json
 
 # Print the tool contract (description + JSON Schemas) for a model to read:
 critical-thinking schema
 ```
 
 `critical-thinking cli` keeps one in-memory session for the process, so history, confidence, and
-branches accumulate across input lines. Validation/parse errors are written to
-stderr (or to stdout in `--json` mode, to keep the stream complete) and the
-process continues; the exit code is `1` if any line errored, else `0`.
+branches accumulate across input lines. Malformed-JSON lines are diagnosed on
+stderr; a line the engine rejects emits its JSON error object to stdout (to keep
+the stream complete) and the process continues; the exit code is `1` if any line
+errored, else `0`.

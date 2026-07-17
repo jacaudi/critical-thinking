@@ -72,17 +72,16 @@ host required. This is **not** an MCP integration: no host is involved and no
 agent, script, or orchestrator emit NDJSON `ThoughtData` (one JSON object per
 line) and read the result back.
 
-- `critical-thinking cli` prints a narrated transcript to stdout.
-- `critical-thinking cli --json` prints structured `ThoughtResponse` as NDJSON —
-  the machine-readable surface for programmatic callers.
+- `critical-thinking cli` prints structured `ThoughtResponse` as NDJSON — one
+  JSON object per processed line, the machine-readable surface for programmatic
+  callers.
 
 History, confidence, and branches accumulate across input lines that share an
 `episodeId` (absent → the `"default"` episode) within one run
 (the analog of a single stdio MCP session). Every line is processed; the command
-exits non-zero if any line fails. A malformed-JSON line is reported on stderr (in
-both modes). A line the engine rejects (for example a validation error) is
-reported on stderr in the default mode, or — in `--json` mode — emitted to stdout
-as a JSON error object (`{"error":…,"status":"failed"}`) so the `--json` stream
+exits non-zero if any line fails. A malformed-JSON line is reported on stderr. A
+line the engine rejects (for example a validation error) is emitted to stdout
+as a JSON error object (`{"error":…,"status":"failed"}`) so the output stream
 stays complete and parseable line-for-line.
 
 Each `ThoughtData` line must carry the required fields — `thought`,
@@ -109,61 +108,7 @@ critical-thinking cli <<'EOF'
 EOF
 ```
 
-Narrated output:
-
-```
-Thought 1 of 3 · confidence 0.60
-
-Reads dominate writes here, so I'll normalize the schema first.
-
-  Assumptions:
-    - read:write ratio is ~10:1
-
-  Critique:
-    I jumped to a solution before confirming the ratio.
-
-  Counter-argument:
-    If writes dominate, a denormalized store is simpler.
-
-  Next, I want to: Verify the read:write ratio before committing to normalization.
-
-— session confidence 0.60 across 1 thought
-
-Revision of thought 1 (now thought 2) · confidence 0.70
-
-Correction: the measured ratio is ~2:1, so normalization is far less decisive.
-
-  Assumptions:
-    - measured read:write ratio is 2:1
-
-  Critique:
-    My first thought over-weighted reads on an unverified 10:1 guess.
-
-  Counter-argument:
-    Even at 2:1 reads still lead, so normalizing isn't wrong, just weaker.
-
-  Next, I want to: Weigh write-amplification against the modest read advantage.
-
-— session confidence 0.65 across 2 thoughts
-
-Branch 'denormalized' from thought 1 · confidence 0.50
-
-Branch: keep one denormalized table and accept write fan-out instead.
-
-  Assumptions:
-    - write fan-out stays under 3x
-
-  Critique:
-    This trades read simplicity for a write cost I have not measured.
-
-  Counter-argument:
-    If fan-out exceeds 3x, this branch is worse than normalizing.
-
-— branch 'denormalized' confidence 0.50 across 1 thought
-— session confidence (trunk) 0.65 across 2 thoughts
-```
-
-The same input with `--json` yields one `ThoughtResponse` per line:
+Output — one `ThoughtResponse` per line:
 
 ```
 {"thoughtNumber":1,"totalThoughts":3,"nextThoughtNeeded":true,"branches":[],"thoughtHistoryLength":1,"sessionConfidence":0.6}
