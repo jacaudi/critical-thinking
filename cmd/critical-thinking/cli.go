@@ -12,12 +12,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// errCLIFailed is the sentinel returned by the cli command's RunE when at least
-// one input line failed. runCLI has already written per-line diagnostics to
-// stderr; this sentinel drives main()'s exit code to 1. The root leaves
-// SilenceErrors=false, so cobra also prints this error's message to stderr as a
-// one-line summary — never to stdout.
-var errCLIFailed = errors.New("cli: one or more input lines failed")
+// errCLIFailed is the sentinel returned by the cli command's RunE when input
+// failed to process (any line in stream mode; the single document in --once
+// mode). runCLI/runOnce have already written diagnostics to stderr; this
+// sentinel drives main()'s exit code to 1. The root leaves
+// SilenceErrors=false, so cobra also prints this error's message to stderr as
+// a one-line summary — never to stdout.
+var errCLIFailed = errors.New("cli: input failed")
 
 // runCLI runs the thinking engine over a plain stdin→stdout loop (no MCP).
 // One in-memory thinking.NewServer() lives for the call, so history,
@@ -109,20 +110,41 @@ func runOnce(arg *string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 // newCliCmd streams NDJSON ThoughtData from stdin through the engine (no MCP),
-// emitting one structured ThoughtResponse JSON object per line. It processes
-// EVERY line, then returns errCLIFailed iff any line failed, so the exit code
-// is 1 without fail-fast (pin 1).
+// emitting one structured ThoughtResponse JSON object per line. Stream mode
+// processes EVERY line, then returns errCLIFailed iff any line failed, so the
+// exit code is 1 without fail-fast (pin 1). --once instead processes exactly
+// one ThoughtData — from the positional argument, or stdin when omitted —
+// against a fresh server, and exits 0/1 (#74).
 func newCliCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "cli",
-		Short: "Stream NDJSON ThoughtData through the engine (no MCP host)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			code := runCLI(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
+	var once bool
+	cmd := &cobra.Command{
+		Use:   "cli [thought-json]",
+		Short: "Process ThoughtData through the engine, streamed via stdin or as a single --once call (no MCP host)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// The positional is only meaningful in --once mode; rejecting it
+			// otherwise keeps the stream contract unchanged. Checked here (not
+			// a custom Args validator) so the flag value is unambiguously
+			// parsed and all mode logic reads top-to-bottom in one place.
+			if len(args) == 1 && !once {
+				return errors.New("cli: an argument requires --once")
+			}
+			var code int
+			if once {
+				var arg *string
+				if len(args) == 1 {
+					arg = &args[0]
+				}
+				code = runOnce(arg, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
+			} else {
+				code = runCLI(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
+			}
 			if code != 0 {
 				return errCLIFailed
 			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&once, "once", false, "process exactly one ThoughtData (from the argument, or stdin if omitted) and exit")
+	return cmd
 }

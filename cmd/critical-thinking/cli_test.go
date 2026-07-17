@@ -208,3 +208,63 @@ func TestRunOnceTrailingData(t *testing.T) {
 		t.Errorf("exit = %d; want 1", code)
 	}
 }
+
+func TestCliCmdOnceArgSuccess(t *testing.T) {
+	cmd := newCliCmd()
+	cmd.SetIn(strings.NewReader("")) // must NOT be read when the arg is given
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"--once", validOnceInput})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() err = %v, want nil", err)
+	}
+	if !strings.Contains(out.String(), `"thoughtHistoryLength":1`) {
+		t.Errorf("expected one ThoughtResponse on stdout: %s", out.String())
+	}
+}
+
+func TestCliCmdOnceStdinFallback(t *testing.T) {
+	cmd := newCliCmd()
+	cmd.SetIn(strings.NewReader(validOnceInput))
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"--once"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() err = %v, want nil", err)
+	}
+	if !strings.Contains(out.String(), `"thoughtHistoryLength":1`) {
+		t.Errorf("expected one ThoughtResponse on stdout: %s", out.String())
+	}
+}
+
+func TestCliCmdOnceFailureReturnsSentinel(t *testing.T) {
+	cmd := newCliCmd()
+	cmd.SetIn(strings.NewReader(""))
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"--once", "{not json"})
+	if err := cmd.Execute(); !errors.Is(err, errCLIFailed) {
+		t.Fatalf("Execute() err = %v, want errCLIFailed", err)
+	}
+}
+
+// A positional argument without --once must be rejected, so the stream
+// contract is not silently changed.
+func TestCliCmdArgWithoutOnceRejected(t *testing.T) {
+	cmd := newCliCmd()
+	cmd.SetIn(strings.NewReader(""))
+	var out, errBuf bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{validOnceInput})
+	err := cmd.Execute()
+	if err == nil || errors.Is(err, errCLIFailed) {
+		t.Fatalf("Execute() err = %v, want a usage error distinct from errCLIFailed", err)
+	}
+	if !strings.Contains(err.Error(), "--once") {
+		t.Errorf("error should point at --once: %v", err)
+	}
+}
