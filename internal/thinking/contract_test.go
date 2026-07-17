@@ -67,6 +67,14 @@ func TestRangeErrorOmitsHint(t *testing.T) {
 	if p.Hint != "" {
 		t.Errorf("range error must not carry a hint; got %q", p.Hint)
 	}
+	// The hint key must be absent from the wire, not present-but-empty.
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(res.Text), &raw); err != nil {
+		t.Fatalf("error result is not JSON: %v", err)
+	}
+	if _, ok := raw["hint"]; ok {
+		t.Errorf("range error must not carry a hint key on the wire; got %s", res.Text)
+	}
 }
 
 func TestToolDescriptionContractGuards(t *testing.T) {
