@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.15.1](https://github.com/jacaudi/critical-thinking/compare/v1.15.0...v1.15.1) (2026-07-17)
+### Bug Fixes
+
+* **ci:** pin conventional-changelog-conventionalcommits to v9 in release pipeline [skip ci] ([3b0dca0](https://github.com/jacaudi/critical-thinking/commit/3b0dca0ff6bb166a39965fa0056f2f8ead6ff72a))
+* **deps:** update module github.com/modelcontextprotocol/go-sdk to v1.6.1 ([8fcb709](https://github.com/jacaudi/critical-thinking/commit/8fcb709f8b3cee15fed610b4fb4d33ffa5d2e560))
+
+### Documentation
+
+* **changelog:** backfill v1.11.0-v1.15.0 release notes [skip ci] ([a2055d3](https://github.com/jacaudi/critical-thinking/commit/a2055d3025941e2ec066dd710cfa963e1784b02f))
+
+### Dependencies
+
+* **deps:** update actions/checkout action to v7 ([78066a9](https://github.com/jacaudi/critical-thinking/commit/78066a9a09c2e49140303de2c76953c0356bb344))
+* **deps:** update actions/create-github-app-token digest to bcd2ba4 ([773b25e](https://github.com/jacaudi/critical-thinking/commit/773b25efe98a7fbd2d4ca17d6fc73d8dbd7df94d))
+* **deps:** update docker/dockerfile docker tag to v1.25 ([b1cbffd](https://github.com/jacaudi/critical-thinking/commit/b1cbffdba3c7b6a4e0aa42758b5c6b08a38bca69))
+* **deps:** update gcr.io/distroless/static-debian12:nonroot docker digest to aef9602 ([f39e382](https://github.com/jacaudi/critical-thinking/commit/f39e382537791a31817b89a6c61b7f660e5a8d82))
+* **deps:** update go module directive to v1.26.5 ([8bc66f9](https://github.com/jacaudi/critical-thinking/commit/8bc66f938189865d07c0830140be7e9d945c386a))
+* **deps:** update golang:1.26-alpine docker digest to 0178a64 ([2e5226d](https://github.com/jacaudi/critical-thinking/commit/2e5226de760d65a85272544bafe782a771867912))
+* **deps:** update renovatebot/github-action action to v46.1.19 ([239937e](https://github.com/jacaudi/critical-thinking/commit/239937e121b12bbefbad544ffcdc0ba837320088))
+
 ## [1.15.0](https://github.com/jacaudi/critical-thinking/compare/v1.14.0...v1.15.0) (2026-07-17)
 ### Features
 
