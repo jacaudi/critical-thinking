@@ -1,16 +1,42 @@
 # Changelog
 
 ## [1.15.0](https://github.com/jacaudi/critical-thinking/compare/v1.14.0...v1.15.0) (2026-07-17)
+### Features
+
+* add OpenTelemetry tracing and metrics ([#84](https://github.com/jacaudi/critical-thinking/issues/84)) ([1afef63](https://github.com/jacaudi/critical-thinking/commit/1afef63123dbf476a62ac9176fda1b6cb2f0dfbb))
 
 ## [1.14.0](https://github.com/jacaudi/critical-thinking/compare/v1.13.0...v1.14.0) (2026-07-17)
+### Features
+
+* add OIDC bearer-token authentication to the HTTP transport ([#83](https://github.com/jacaudi/critical-thinking/issues/83)) ([940ac36](https://github.com/jacaudi/critical-thinking/commit/940ac360d2d407fb1e4e670da49829de437c7085))
 
 ## [1.13.0](https://github.com/jacaudi/critical-thinking/compare/v1.12.1...v1.13.0) (2026-07-17)
+### Features
+
+* **cli:** add --once single-shot mode ([#82](https://github.com/jacaudi/critical-thinking/issues/82)) ([b04dccf](https://github.com/jacaudi/critical-thinking/commit/b04dccf8170810f0a23b37d9282900449f166907))
 
 ## [1.12.1](https://github.com/jacaudi/critical-thinking/compare/v1.12.0...v1.12.1) (2026-07-17)
+### Bug Fixes
+
+* **plugin:** harden install/release pipeline (checksum verification + narrower hook matcher) ([#81](https://github.com/jacaudi/critical-thinking/issues/81)) ([635015f](https://github.com/jacaudi/critical-thinking/commit/635015f75ac0f48eddf27cac3139ea1af5840d49))
 
 ## [1.12.0](https://github.com/jacaudi/critical-thinking/compare/v1.11.0...v1.12.0) (2026-07-17)
+### Refactors
+
+* **thinking:** collapse error-result JSON builders into one encoder ([#73](https://github.com/jacaudi/critical-thinking/issues/73)) ([#80](https://github.com/jacaudi/critical-thinking/issues/80)) ([d939e37](https://github.com/jacaudi/critical-thinking/commit/d939e37b58e3622591b7ce39f63a7b331ef3cc14))
 
 ## [1.11.0](https://github.com/jacaudi/critical-thinking/compare/v1.10.1...v1.11.0) (2026-07-17)
+### ⚠ BREAKING CHANGES
+
+* `cli` now always emits structured `ThoughtResponse` NDJSON; the `--json` flag and the narrated-transcript output mode are removed.
+
+### Features
+
+* remove --json flag from cli subcommand ([#78](https://github.com/jacaudi/critical-thinking/issues/78)) ([bcb3020](https://github.com/jacaudi/critical-thinking/commit/bcb302088f123a8d1bdc1f614d54f80e1251997f))
+
+### Refactors
+
+* modernize Go 1.26 idioms and drop unused sessionRegistry.add() param ([#79](https://github.com/jacaudi/critical-thinking/issues/79)) ([00d5eab](https://github.com/jacaudi/critical-thinking/commit/00d5eab827c15f2d6b61df9fa8f72e2dffd04187))
 
 ## [1.10.1](https://github.com/jacaudi/critical-thinking/compare/v1.10.0...v1.10.1) (2026-06-22)
 ### Dependencies
