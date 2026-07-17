@@ -123,3 +123,88 @@ func TestCliCmdSuccessReturnsNil(t *testing.T) {
 		t.Fatalf("Execute() err = %v, want nil", err)
 	}
 }
+
+// validOnceInput is one minimal valid ThoughtData document, shared by the
+// --once tests.
+const validOnceInput = `{"thought":"x","thoughtNumber":1,"totalThoughts":1,"nextThoughtNeeded":false,"confidence":0.5,"assumptions":[],"critique":"c","counterArgument":"ca"}`
+
+func TestRunOnceArg(t *testing.T) {
+	arg := validOnceInput
+	var out, errb bytes.Buffer
+	if code := runOnce(&arg, strings.NewReader(""), &out, &errb); code != 0 {
+		t.Fatalf("exit = %d; stderr = %s", code, errb.String())
+	}
+	var resp thinking.ThoughtResponse
+	if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &resp); err != nil {
+		t.Fatalf("stdout is not a ThoughtResponse: %v\n%s", err, out.String())
+	}
+	if resp.ThoughtNumber != 1 || resp.ThoughtHistoryLength != 1 {
+		t.Errorf("resp = %+v", resp)
+	}
+	if errb.Len() != 0 {
+		t.Errorf("stderr should be empty: %q", errb.String())
+	}
+}
+
+// Pretty-printed multi-line JSON on stdin must work in --once mode — the one
+// input shape the NDJSON stream loop cannot accept.
+func TestRunOnceStdinFallbackPrettyJSON(t *testing.T) {
+	pretty := "{\n  \"thought\": \"x\",\n  \"thoughtNumber\": 1,\n  \"totalThoughts\": 1,\n  \"nextThoughtNeeded\": false,\n  \"confidence\": 0.5,\n  \"assumptions\": [],\n  \"critique\": \"c\",\n  \"counterArgument\": \"ca\"\n}\n"
+	var out, errb bytes.Buffer
+	if code := runOnce(nil, strings.NewReader(pretty), &out, &errb); code != 0 {
+		t.Fatalf("exit = %d; stderr = %s", code, errb.String())
+	}
+	if !strings.Contains(out.String(), `"thoughtHistoryLength":1`) {
+		t.Errorf("expected one ThoughtResponse on stdout:\n%s", out.String())
+	}
+}
+
+func TestRunOnceMalformedArg(t *testing.T) {
+	arg := "{not json"
+	var out, errb bytes.Buffer
+	if code := runOnce(&arg, strings.NewReader(""), &out, &errb); code != 1 {
+		t.Errorf("exit = %d; want 1", code)
+	}
+	if !strings.Contains(errb.String(), "argument") {
+		t.Errorf("stderr should name the source 'argument': %q", errb.String())
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout must stay clean: %q", out.String())
+	}
+}
+
+// Mirrors TestRunCLIValidationErrorRouting for the single-shot path: an
+// IsError result emits its error JSON to stdout, never stderr.
+func TestRunOnceValidationErrorRouting(t *testing.T) {
+	bad := `{"thought":"x","thoughtNumber":1,"totalThoughts":1,"nextThoughtNeeded":false,"confidence":0.5,"assumptions":[],"counterArgument":"ca"}`
+
+	var out, errb bytes.Buffer
+	if code := runOnce(&bad, strings.NewReader(""), &out, &errb); code != 1 {
+		t.Errorf("exit = %d; want 1", code)
+	}
+	if !strings.Contains(out.String(), `"status":"failed"`) || errb.Len() != 0 {
+		t.Errorf("error JSON should go to stdout only; out=%q err=%q", out.String(), errb.String())
+	}
+}
+
+// Empty stdin is a FAILURE in --once mode (there is no next line to continue
+// to) — deliberately unlike the stream loop's blank-line skip.
+func TestRunOnceEmptyStdin(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := runOnce(nil, strings.NewReader("\n  \n"), &out, &errb); code != 1 {
+		t.Errorf("exit = %d; want 1", code)
+	}
+	if !strings.Contains(errb.String(), "stdin") {
+		t.Errorf("stderr should name the source 'stdin': %q", errb.String())
+	}
+}
+
+// Trailing data after the document (e.g. two NDJSON lines piped into --once)
+// is an error: --once means exactly one thought.
+func TestRunOnceTrailingData(t *testing.T) {
+	two := validOnceInput + "\n" + validOnceInput + "\n"
+	var out, errb bytes.Buffer
+	if code := runOnce(nil, strings.NewReader(two), &out, &errb); code != 1 {
+		t.Errorf("exit = %d; want 1", code)
+	}
+}

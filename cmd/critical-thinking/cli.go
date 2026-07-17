@@ -79,6 +79,35 @@ func processOne(state *thinking.SequentialThinkingServer, raw []byte, src string
 	return true
 }
 
+// runOnce processes exactly one ThoughtData through a fresh in-memory server
+// and exits — the single-shot analog of runCLI for scripting/testing (#74).
+// The document comes from arg when non-nil, else from ALL of stdin — one JSON
+// document, so pretty-printed multi-line JSON is fine, unlike the NDJSON
+// loop. Empty input and trailing data after the document are unmarshal
+// failures: with no next line to continue to, --once has nothing to skip.
+// Returns 0 on success, 1 on any failure.
+func runOnce(arg *string, stdin io.Reader, stdout, stderr io.Writer) int {
+	var raw []byte
+	src := "stdin"
+	if arg != nil {
+		raw, src = []byte(*arg), "argument"
+	} else {
+		// Unbounded by design: the stream loop's 1 MiB buffer is a
+		// bufio.Scanner token-size mechanism, not an input-size contract
+		// (serve mode reads unbounded JSON-RPC frames too). Design §5.2.
+		b, err := io.ReadAll(stdin)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "cli: read: %v\n", err)
+			return 1
+		}
+		raw = b
+	}
+	if processOne(thinking.NewServer(), raw, src, stdout, stderr) {
+		return 0
+	}
+	return 1
+}
+
 // newCliCmd streams NDJSON ThoughtData from stdin through the engine (no MCP),
 // emitting one structured ThoughtResponse JSON object per line. It processes
 // EVERY line, then returns errCLIFailed iff any line failed, so the exit code
