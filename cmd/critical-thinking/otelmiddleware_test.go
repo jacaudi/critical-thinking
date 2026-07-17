@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -175,6 +176,56 @@ func TestToolSpanCarriesDomainAttributes(t *testing.T) {
 	}
 	if got := attrs["ct.episode_id"].AsString(); got != "default" {
 		t.Errorf("ct.episode_id = %q, want default", got)
+	}
+}
+
+// TestSessionAndEvictionCounters drives 65 distinct episodes directly through
+// the state machine (bypassing HTTP) to trigger exactly one LRU eviction
+// (defaultMaxEpisodes is 64), then asserts both unattributed counters wired
+// in newMCPServer.
+func TestSessionAndEvictionCounters(t *testing.T) {
+	_, reader := setupTestTelemetry(t)
+
+	state := thinking.NewServer()
+	_ = newMCPServer(state) // wires OnEvict and counts one session
+
+	// Drive 65 distinct episodes straight through the state machine: the
+	// 65th exceeds defaultMaxEpisodes(64) and evicts one.
+	yes := true
+	for i := 1; i <= 65; i++ {
+		_, err := state.ProcessThought(thinking.ThoughtData{
+			Thought:           "t",
+			ThoughtNumber:     1,
+			TotalThoughts:     1,
+			NextThoughtNeeded: &yes,
+			Confidence:        0.5,
+			Assumptions:       []string{},
+			Critique:          "c",
+			CounterArgument:   "ca",
+			// Required because NextThoughtNeeded is true (schema.go Validate);
+			// omitted in the task-5 brief's snippet, which made every call fail
+			// validation silently (ProcessThought's Go-level err stays nil for
+			// validation failures) and never created an episode to evict.
+			NextStepRationale: "n",
+			EpisodeID:         "ep-" + strconv.Itoa(i),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatal(err)
+	}
+
+	created := findMetric(t, rm, "ct.sessions.created").Data.(metricdata.Sum[int64])
+	if got := created.DataPoints[0].Value; got != 1 {
+		t.Errorf("ct.sessions.created = %d, want 1", got)
+	}
+	evicted := findMetric(t, rm, "ct.episodes.evicted").Data.(metricdata.Sum[int64])
+	if got := evicted.DataPoints[0].Value; got != 1 {
+		t.Errorf("ct.episodes.evicted = %d, want 1", got)
 	}
 }
 

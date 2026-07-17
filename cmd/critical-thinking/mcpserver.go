@@ -18,7 +18,9 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/jacaudi/critical-thinking/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -157,6 +159,15 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 		Version: version,
 	}, nil)
 	srv.AddReceivingMiddleware(otelMiddleware())
+
+	meter := otel.Meter(instrumentationScope)
+	sessionsCreated, _ := meter.Int64Counter("ct.sessions.created",
+		metric.WithDescription("MCP server sessions created (monotonic; there is deliberately no active-sessions gauge)"))
+	sessionsCreated.Add(context.Background(), 1)
+
+	episodesEvicted, _ := meter.Int64Counter("ct.episodes.evicted",
+		metric.WithDescription("Thinking episodes evicted by the per-session LRU cap"))
+	state.OnEvict = func() { episodesEvicted.Add(context.Background(), 1) }
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "criticalthinking",
