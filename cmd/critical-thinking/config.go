@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"strings"
+
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -34,6 +37,8 @@ func bindFlags(v *viper.Viper, flags *pflag.FlagSet) error {
 type httpConfig struct {
 	AllowedOrigins []string
 	HTTPHost       string
+	OIDCIssuer     string
+	OIDCAudience   string
 }
 
 // httpConfigFromViper extracts the HTTP settings, reusing parseAllowedOrigins as
@@ -42,5 +47,19 @@ func httpConfigFromViper(v *viper.Viper) httpConfig {
 	return httpConfig{
 		AllowedOrigins: parseAllowedOrigins(v.GetString("allowed_origins")),
 		HTTPHost:       v.GetString("http_host"),
+		OIDCIssuer:     strings.TrimSpace(v.GetString("oidc_issuer")),
+		OIDCAudience:   strings.TrimSpace(v.GetString("oidc_audience")),
 	}
+}
+
+// validateAuth fails fast on the one dangerous misconfiguration: an issuer set without an
+// audience, which would leave the aud claim unchecked. Pure (no network) so it runs before
+// any port is bound and is unit-testable. Empty issuer = auth disabled = valid.
+func (c httpConfig) validateAuth() error {
+	if c.OIDCIssuer != "" && c.OIDCAudience == "" {
+		return errors.New("CTHINK_OIDC_ISSUER is set but CTHINK_OIDC_AUDIENCE is empty; " +
+			"refusing to start with authentication misconfigured (an empty audience would " +
+			"disable audience validation)")
+	}
+	return nil
 }

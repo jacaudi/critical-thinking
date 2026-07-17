@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -343,5 +344,81 @@ func TestThinkingCurrentResourceIsPerSession(t *testing.T) {
 	}
 	if strings.Contains(readB, "A-resource") {
 		t.Errorf("session B snapshot LEAKED session A's tag; got:\n%s", readB)
+	}
+}
+
+func TestHTTPAuthEnabledGatesMCP(t *testing.T) {
+	idp := newFakeIdP(t)
+	verifier, err := newOIDCVerifier(context.Background(), idp.issuer(), "critical-thinking")
+	if err != nil {
+		t.Fatalf("newOIDCVerifier: %v", err)
+	}
+	h, err := buildHTTPHandler(httpConfig{}, verifier, newSessionRegistry())
+	if err != nil {
+		t.Fatalf("buildHTTPHandler: %v", err)
+	}
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	// /mcp without a token → 401
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/mcp", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("/mcp unauthenticated status = %d, want 401", resp.StatusCode)
+	}
+
+	// /health without a token → 200 (probes must never be gated)
+	hresp, err := http.Get(ts.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = hresp.Body.Close()
+	if hresp.StatusCode != http.StatusOK {
+		t.Errorf("/health status = %d, want 200 (must stay unauthenticated)", hresp.StatusCode)
+	}
+}
+
+func TestHTTPAuthDisabledLeavesMCPOpen(t *testing.T) {
+	// verifier nil = auth disabled: an MCP initialize handshake must succeed without a token,
+	// proving backward compatibility. newHTTPClient fatals if the handshake fails.
+	h, err := buildHTTPHandler(httpConfig{}, nil, newSessionRegistry())
+	if err != nil {
+		t.Fatalf("buildHTTPHandler: %v", err)
+	}
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+	c := newHTTPClient(t, ts.URL) // performs initialize without any Authorization header
+	if c.sessionID == "" {
+		t.Fatal("expected a session id from an unauthenticated handshake when auth is disabled")
+	}
+}
+
+func TestHTTPAuthOptionsBypass(t *testing.T) {
+	// OPTIONS preflight must short-circuit in withCORS before auth, returning 200 without a token.
+	idp := newFakeIdP(t)
+	verifier, err := newOIDCVerifier(context.Background(), idp.issuer(), "critical-thinking")
+	if err != nil {
+		t.Fatalf("newOIDCVerifier: %v", err)
+	}
+	h, err := buildHTTPHandler(httpConfig{}, verifier, newSessionRegistry())
+	if err != nil {
+		t.Fatalf("buildHTTPHandler: %v", err)
+	}
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodOptions, ts.URL+"/mcp", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("OPTIONS /mcp status = %d, want 200 (preflight must bypass auth)", resp.StatusCode)
 	}
 }
