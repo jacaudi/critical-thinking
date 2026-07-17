@@ -11,9 +11,13 @@
 #
 # Behavior:
 #   - Binary present AND .installed-version == EXPECTED_VERSION -> no-op.
-#   - Otherwise -> download EXPECTED_VERSION's archive, install, record version.
-#   - Download fails AND a binary already exists -> keep it, warn, exit 0.
-#   - Download fails AND no binary exists -> fail loudly (exit 1).
+#   - Otherwise -> download EXPECTED_VERSION's archive + checksums.txt, verify the
+#     SHA-256, extract, install, record version.
+#   - Archive OR checksums download fails (network) AND a binary already exists ->
+#     keep it, warn, exit 0. No existing binary -> fail loudly (exit 1). Never
+#     installs an unverified binary.
+#   - Checksum MISMATCH (possible tampering/corruption) -> always fail closed
+#     (exit 1); the artifact is never made executable.
 #
 # Force re-download: delete ${CLAUDE_PLUGIN_ROOT}/bin/critical-thinking.
 # Windows note: requires Git Bash / WSL / another POSIX shell.
@@ -57,7 +61,9 @@ esac
 VERSION="${EXPECTED_VERSION#v}"
 EXT="tar.gz"
 [[ "${OS}" == "windows" ]] && EXT="zip"
-URL="https://github.com/${REPO}/releases/download/${EXPECTED_VERSION}/${PROJECT}_${VERSION}_${OS}_${ARCH}.${EXT}"
+ARCHIVE_NAME="${PROJECT}_${VERSION}_${OS}_${ARCH}.${EXT}"
+URL="https://github.com/${REPO}/releases/download/${EXPECTED_VERSION}/${ARCHIVE_NAME}"
+CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${EXPECTED_VERSION}/checksums.txt"
 
 echo "critical-thinking: installing ${EXPECTED_VERSION} from ${URL}" >&2
 
@@ -65,24 +71,51 @@ mkdir -p "${BIN_DIR}"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
 
-download_ok=1
-if [[ "${EXT}" == "tar.gz" ]]; then
-  curl -fsSL "${URL}" | tar -xzC "${WORK_DIR}" || download_ok=0
-else
-  curl -fsSL -o "${WORK_DIR}/release.zip" "${URL}" || download_ok=0
-  if [[ "${download_ok}" == "1" ]]; then
-    unzip -q "${WORK_DIR}/release.zip" -d "${WORK_DIR}" || download_ok=0
+# Prefer sha256sum (Linux, Git Bash); fall back to shasum -a 256 (macOS default).
+# Reads "<hash>  <name>" lines on stdin; cwd must contain <name>.
+sha256_check() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum -c -
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 -c -
+  else
+    echo "critical-thinking: no sha256sum/shasum found; cannot verify integrity" >&2
+    return 1
   fi
-fi
+}
 
-# Download failure: tolerate it if we already have *some* binary; otherwise fail.
-if [[ "${download_ok}" == "0" ]]; then
+# keep_existing_or_fail <reason>: network-class failure. Preserve a working binary
+# if we have one (exit 0); otherwise fail loudly (exit 1). NEVER installs.
+keep_existing_or_fail() {
   if [[ -x "${BIN_PATH}" ]]; then
-    echo "critical-thinking: download failed; keeping existing binary at ${BIN_PATH}" >&2
+    echo "critical-thinking: $1; keeping existing binary at ${BIN_PATH}" >&2
     exit 0
   fi
-  echo "critical-thinking: download failed and no existing binary — check network or install manually" >&2
+  echo "critical-thinking: $1 and no existing binary — check network or install manually" >&2
   exit 1
+}
+
+# Download the archive to a file (must be on disk to hash it).
+curl -fsSL -o "${WORK_DIR}/${ARCHIVE_NAME}" "${URL}" \
+  || keep_existing_or_fail "archive download failed"
+
+# Download the checksums manifest from the same release/tag.
+curl -fsSL -o "${WORK_DIR}/checksums.txt" "${CHECKSUMS_URL}" \
+  || keep_existing_or_fail "checksums download failed"
+
+# Verify integrity BEFORE extracting or installing. A mismatch is a stronger
+# signal than a network failure (possible tampering/corruption of an auto-executed
+# binary), so it ALWAYS fails closed — we never install the artifact.
+if ! ( cd "${WORK_DIR}" && grep " ${ARCHIVE_NAME}\$" checksums.txt | sha256_check ); then
+  echo "critical-thinking: CHECKSUM VERIFICATION FAILED for ${ARCHIVE_NAME} — refusing to install (possible corruption or tampering)" >&2
+  exit 1
+fi
+
+# Verified: extract, then install.
+if [[ "${EXT}" == "tar.gz" ]]; then
+  tar -xzf "${WORK_DIR}/${ARCHIVE_NAME}" -C "${WORK_DIR}"
+else
+  unzip -q "${WORK_DIR}/${ARCHIVE_NAME}" -d "${WORK_DIR}"
 fi
 
 SRC="${WORK_DIR}/${PROJECT}"
@@ -96,4 +129,4 @@ fi
 mv "${SRC}" "${BIN_PATH}"
 chmod +x "${BIN_PATH}"
 printf '%s\n' "${EXPECTED_VERSION}" > "${INSTALLED_VERSION_FILE}"
-echo "critical-thinking: installed ${BIN_PATH} (${EXPECTED_VERSION})" >&2
+echo "critical-thinking: installed ${BIN_PATH} (${EXPECTED_VERSION}, checksum verified)" >&2
