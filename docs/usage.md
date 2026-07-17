@@ -75,6 +75,13 @@ line) and read the result back.
 - `critical-thinking cli` prints structured `ThoughtResponse` as NDJSON — one
   JSON object per processed line, the machine-readable surface for programmatic
   callers.
+- `critical-thinking cli --once '<thought-json>'` processes exactly **one**
+  thought and exits — single-shot, for scripting and testing. The JSON comes
+  from the argument, or from stdin when the argument is omitted (any JSON
+  formatting works on stdin, including pretty-printed — it need not be one
+  line). Output is one `ThoughtResponse` JSON document; exit code is `0` on
+  success, `1` if the input fails to parse or validate. Empty input or
+  trailing data after the document is an error: `--once` means one thought.
 
 History, confidence, and branches accumulate across input lines that share an
 `episodeId` (absent → the `"default"` episode) within one run

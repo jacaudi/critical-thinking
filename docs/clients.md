@@ -139,6 +139,12 @@ Run the engine directly, without an MCP client:
 printf '%s\n' '{"thought":"...","thoughtNumber":1,"totalThoughts":3,"nextThoughtNeeded":true,"confidence":0.6,"assumptions":[],"critique":"...","counterArgument":"...","nextStepRationale":"..."}' \
   | critical-thinking cli
 
+# Single-shot: one thought in, one result out, exit 0/1.
+critical-thinking cli --once '{"thought":"...","thoughtNumber":1,"totalThoughts":1,"nextThoughtNeeded":false,"confidence":0.6,"assumptions":[],"critique":"...","counterArgument":"..."}'
+
+# Single-shot from stdin (pretty-printed JSON is fine here):
+critical-thinking cli --once < thought.json
+
 # Print the tool contract (description + JSON Schemas) for a model to read:
 critical-thinking schema
 ```
@@ -148,3 +154,7 @@ branches accumulate across input lines. Malformed-JSON lines are diagnosed on
 stderr; a line the engine rejects emits its JSON error object to stdout (to keep
 the stream complete) and the process continues; the exit code is `1` if any line
 errored, else `0`.
+
+With `--once`, exactly one thought is processed against a fresh in-memory
+session and the process exits — `0` on success, `1` on any parse or
+validation failure, with the same stderr/stdout routing as stream mode.
