@@ -179,7 +179,7 @@ type ToolResult struct {
 // returned); validation failures produce IsError=true results.
 func (s *SequentialThinkingServer) ProcessThought(td ThoughtData) (ToolResult, error) {
 	if err := td.Validate(); err != nil {
-		return validationErrorResult(err), nil
+		return errorResultWithHint(err, requiredFieldsChecklist), nil
 	}
 
 	// Resolve the logical episode. Empty means the "default" episode. This is
@@ -350,29 +350,25 @@ func (e *episode) renderFooter(b *strings.Builder, td ThoughtData, sessionConf f
 		sessionConf, e.confidenceN, noun)
 }
 
-// validationErrorResult formats a contract-validation failure like errorResult
-// but adds a self-correcting `hint` listing every required field, so the caller
-// can fix the next call without a second rejection. Used ONLY for Validate()
-// failures — not for the state-dependent range errors, where a field checklist
-// would be misleading noise.
-func validationErrorResult(err error) ToolResult {
+// errorResultWithHint is the single encoder for the JS-compatible on-wire error
+// envelope {error, status:"failed"[, hint]}. An empty hint omits the key.
+// The hint (the required-fields checklist) is used ONLY for Validate() failures —
+// not for state-dependent range errors, where a field checklist would be
+// misleading noise.
+func errorResultWithHint(err error, hint string) ToolResult {
+	// Marshaling a fixed-shape struct of strings cannot fail.
 	body, _ := json.Marshal(struct {
 		Error  string `json:"error"`
 		Status string `json:"status"`
-		Hint   string `json:"hint"`
-	}{Error: err.Error(), Status: "failed", Hint: requiredFieldsChecklist})
+		Hint   string `json:"hint,omitempty"`
+	}{Error: err.Error(), Status: "failed", Hint: hint})
 	return ToolResult{Text: string(body), IsError: true}
 }
 
 // errorResult formats a validation/runtime error in the JS-compatible
-// {error, status: "failed"} shape.
+// {error, status: "failed"} shape, with no hint.
 func errorResult(err error) ToolResult {
-	// Marshaling a fixed-shape {string,string} struct cannot fail.
-	body, _ := json.Marshal(struct {
-		Error  string `json:"error"`
-		Status string `json:"status"`
-	}{Error: err.Error(), Status: "failed"})
-	return ToolResult{Text: string(body), IsError: true}
+	return errorResultWithHint(err, "")
 }
 
 // HistorySnapshot returns a deep copy of the trunk + branch thought history,
