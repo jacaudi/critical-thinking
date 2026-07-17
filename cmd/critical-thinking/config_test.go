@@ -96,3 +96,50 @@ func TestBindFlagsDefaultWhenNeither(t *testing.T) {
 		t.Error("verbose = true, want false (default)")
 	}
 }
+
+func TestHTTPConfigFromViperOIDC(t *testing.T) {
+	t.Setenv("CTHINK_OIDC_ISSUER", "https://issuer.example")
+	t.Setenv("CTHINK_OIDC_AUDIENCE", "critical-thinking")
+	v := newConfigViper()
+	cfg := httpConfigFromViper(v)
+	if cfg.OIDCIssuer != "https://issuer.example" {
+		t.Errorf("OIDCIssuer = %q, want https://issuer.example", cfg.OIDCIssuer)
+	}
+	if cfg.OIDCAudience != "critical-thinking" {
+		t.Errorf("OIDCAudience = %q, want critical-thinking", cfg.OIDCAudience)
+	}
+}
+
+func TestHTTPConfigFromViperOIDCTrimsWhitespace(t *testing.T) {
+	t.Setenv("CTHINK_OIDC_ISSUER", "  https://issuer.example  ")
+	t.Setenv("CTHINK_OIDC_AUDIENCE", "   ") // whitespace-only → must collapse to empty
+	v := newConfigViper()
+	cfg := httpConfigFromViper(v)
+	if cfg.OIDCIssuer != "https://issuer.example" {
+		t.Errorf("OIDCIssuer = %q, want trimmed https://issuer.example", cfg.OIDCIssuer)
+	}
+	if cfg.OIDCAudience != "" {
+		t.Errorf("OIDCAudience = %q, want empty after trim", cfg.OIDCAudience)
+	}
+}
+
+func TestValidateAuth(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     httpConfig
+		wantErr bool
+	}{
+		{"both empty (disabled)", httpConfig{}, false},
+		{"both set", httpConfig{OIDCIssuer: "https://i.example", OIDCAudience: "aud"}, false},
+		{"issuer set, audience empty", httpConfig{OIDCIssuer: "https://i.example"}, true},
+		{"audience set, issuer empty (disabled)", httpConfig{OIDCAudience: "aud"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.validateAuth()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateAuth() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
