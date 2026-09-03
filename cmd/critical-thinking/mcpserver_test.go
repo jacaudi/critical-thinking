@@ -139,7 +139,7 @@ func TestCORSAllowsConfiguredOrigin(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "POST, OPTIONS" {
 		t.Errorf("Allow-Methods = %q, want POST, OPTIONS", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Authorization") {
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Authorization") || !strings.Contains(got, "Mcp-Method") || !strings.Contains(got, "Mcp-Name") {
 		t.Errorf("Allow-Headers = %q, must include Authorization for browser OIDC clients", got)
 	}
 	if got := rec.Header().Get("Vary"); got != "Origin" {
@@ -545,7 +545,7 @@ func TestPreflightWithOrigin(t *testing.T) {
 		if got := resp.Header.Get("Access-Control-Allow-Methods"); got != "POST, OPTIONS" {
 			t.Errorf("Allow-Methods = %q", got)
 		}
-		if got := resp.Header.Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Authorization") {
+		if got := resp.Header.Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Authorization") || !strings.Contains(got, "Mcp-Method") || !strings.Contains(got, "Mcp-Name") {
 			t.Errorf("Allow-Headers = %q, must include Authorization", got)
 		}
 	}

@@ -219,8 +219,9 @@ func handleThought(ctx context.Context, _ *mcp.CallToolRequest, td thinking.Thou
 //
 // The server is stateless, so only POST (and the OPTIONS preflight) are
 // advertised. Authorization is allowed so browser clients can present OIDC
-// bearer tokens; mcp-session-id stays allowed so preflights from older clients
-// that still send it succeed (the server ignores the header).
+// bearer tokens; Mcp-Method and Mcp-Name are the per-request headers MCP
+// protocol 2026-07-28 requires; mcp-session-id stays allowed so preflights
+// from older clients that still send it succeed (the server ignores it).
 //
 // Non-browser callers (no Origin header) bypass the check entirely.
 func withCORS(h http.Handler, allowed []string) http.Handler {
@@ -236,7 +237,7 @@ func withCORS(h http.Handler, allowed []string) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, MCP-Protocol-Version")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, mcp-session-id")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
