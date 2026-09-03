@@ -1,28 +1,31 @@
-// Package thinking implements the criticalthinking MCP tool's data model
-// and per-session state. It has no MCP SDK dependencies; main.go is the
-// adapter that bridges this package to the SDK.
+// Package thinking implements the criticalthinking tool: the input contract
+// (ThoughtData), its validation, and Process, the pure function that turns one
+// thought into a narrated transcript plus a structured echo. The package keeps
+// nothing between calls and imports neither the MCP SDK nor OpenTelemetry;
+// cmd/critical-thinking is the only adapter.
 package thinking
 
 import (
 	"errors"
 	"fmt"
+	"math"
+	"strings"
 )
 
-// ThoughtData is the input to one criticalthinking tool call.
+// ThoughtData is the input to one criticalthinking call.
 //
-// Sent fields whose omission cannot be distinguished from their zero value
-// (NextThoughtNeeded, IsRevision, RevisesThought, BranchFromThought,
-// NeedsMoreThoughts) use pointer types so the validator can detect "not sent".
+// NextThoughtNeeded is a pointer so a missing field can be told apart from an
+// explicit false on the path that has no JSON-schema gate (the cli command).
+// Every other optional field uses its zero value as "absent".
 type ThoughtData struct {
 	Thought           string `json:"thought"`
 	ThoughtNumber     int    `json:"thoughtNumber"`
 	TotalThoughts     int    `json:"totalThoughts"`
 	NextThoughtNeeded *bool  `json:"nextThoughtNeeded"`
-	IsRevision        *bool  `json:"isRevision,omitempty"`
-	RevisesThought    *int   `json:"revisesThought,omitempty"`
-	BranchFromThought *int   `json:"branchFromThought,omitempty"`
+	IsRevision        bool   `json:"isRevision,omitempty"`
+	RevisesThought    int    `json:"revisesThought,omitempty"`
+	BranchFromThought int    `json:"branchFromThought,omitempty"`
 	BranchID          string `json:"branchId,omitempty"`
-	NeedsMoreThoughts *bool  `json:"needsMoreThoughts,omitempty"`
 
 	Confidence        float64  `json:"confidence"`
 	Assumptions       []string `json:"assumptions"`
@@ -30,80 +33,75 @@ type ThoughtData struct {
 	CounterArgument   string   `json:"counterArgument"`
 	NextStepRationale string   `json:"nextStepRationale,omitempty"`
 
-	// EpisodeID partitions state into independent logical reasoning episodes
-	// within one transport session. Empty means the "default" episode.
-	// Any string is valid, so it is not checked in Validate().
-	EpisodeID string `json:"episodeId,omitempty"`
+	// Deprecated: accepted and ignored. The generated JSON schema forbids
+	// unknown properties, so this stays until the next breaking release so
+	// that clients written for v1.15 and earlier keep validating.
+	EpisodeID string `json:"episodeId,omitempty" jsonschema:"Deprecated and ignored: the server keeps no state, so there is nothing to isolate. Omit it."`
+	// Deprecated: accepted and ignored; see EpisodeID.
+	NeedsMoreThoughts bool `json:"needsMoreThoughts,omitempty" jsonschema:"Deprecated and ignored. Adjust totalThoughts instead."`
 }
 
-// ThoughtResponse is the structuredContent of a criticalthinking tool call.
+// ThoughtResponse is the structured echo of one call: the routing fields the
+// caller needs to plan the next call, with TotalThoughts after the clamp.
 type ThoughtResponse struct {
-	ThoughtNumber        int                `json:"thoughtNumber"`
-	TotalThoughts        int                `json:"totalThoughts"`
-	NextThoughtNeeded    bool               `json:"nextThoughtNeeded"`
-	Branches             []string           `json:"branches"`
-	ThoughtHistoryLength int                `json:"thoughtHistoryLength"`
-	SessionConfidence    float64            `json:"sessionConfidence"`
-	BranchConfidences    map[string]float64 `json:"branchConfidences,omitempty"`
-	// EpisodeID echoes the resolved episode ("default" when none was sent) so
-	// the caller can confirm which episode this thought was routed to.
-	EpisodeID string `json:"episodeId"`
+	ThoughtNumber     int     `json:"thoughtNumber"`
+	TotalThoughts     int     `json:"totalThoughts"`
+	NextThoughtNeeded bool    `json:"nextThoughtNeeded"`
+	Confidence        float64 `json:"confidence"`
 }
 
-// requiredFieldsChecklist is the one-line input-contract summary, shared by the
-// tool description's lead-in (description.go) and the validation-error hint
-// (server.go) so the two cannot drift. It is the single source of truth for the
-// required-field set; a change here updates both consumers. (DRY: one piece of
-// knowledge — what every call must send — one representation.)
+// requiredFieldsChecklist is the one-line input contract shared by the tool
+// description's lead-in and the validation-error hint, so the two cannot
+// drift. It restates the rules Validate enforces; keep the two in step.
 const requiredFieldsChecklist = "Every call requires: thought, thoughtNumber, totalThoughts, nextThoughtNeeded, confidence, assumptions, critique, counterArgument — plus nextStepRationale whenever nextThoughtNeeded=true."
 
-// Validate enforces every wire-format rule for ThoughtData except those that
-// require knowing the current session state (RevisesThought / BranchFromThought
-// range checks). Those run separately in SequentialThinkingServer.ProcessThought.
-//
-// Returns the first error encountered; callers that want all errors should
-// extend this with a multi-error type later.
+// Validate enforces every input rule; "present" means non-blank for strings.
 func (td ThoughtData) Validate() error {
-	if td.Thought == "" {
-		return errors.New("thought must be a non-empty string")
+	if strings.TrimSpace(td.Thought) == "" {
+		return errors.New("thought must be a non-blank string")
 	}
 	if td.ThoughtNumber < 1 {
-		return errors.New("thoughtNumber must be ≥ 1")
+		return fmt.Errorf("thoughtNumber must be ≥ 1 (got %d)", td.ThoughtNumber)
 	}
 	if td.TotalThoughts < 1 {
-		return errors.New("totalThoughts must be ≥ 1")
+		return fmt.Errorf("totalThoughts must be ≥ 1 (got %d)", td.TotalThoughts)
 	}
 	if td.NextThoughtNeeded == nil {
 		return errors.New("nextThoughtNeeded must be present (true or false)")
 	}
-	if td.Confidence < 0.0 || td.Confidence > 1.0 {
+	if math.IsNaN(td.Confidence) || td.Confidence < 0.0 || td.Confidence > 1.0 {
 		return fmt.Errorf("confidence must be between 0.0 and 1.0 (got %v)", td.Confidence)
 	}
 	if td.Assumptions == nil {
 		return errors.New("assumptions must be present (use [] if none)")
 	}
-	if td.Critique == "" {
-		return errors.New("critique must be a non-empty string")
+	for i, a := range td.Assumptions {
+		if strings.TrimSpace(a) == "" {
+			return fmt.Errorf("assumptions[%d] must be a non-blank string (use [] if you claim none)", i)
+		}
 	}
-	if td.CounterArgument == "" {
-		return errors.New("counterArgument must be a non-empty string")
+	if strings.TrimSpace(td.Critique) == "" {
+		return errors.New("critique must be a non-blank string")
 	}
-	if *td.NextThoughtNeeded && td.NextStepRationale == "" {
-		return errors.New("nextStepRationale required when nextThoughtNeeded is true")
+	if strings.TrimSpace(td.CounterArgument) == "" {
+		return errors.New("counterArgument must be a non-blank string")
 	}
-
-	// Both-or-neither rule for branch fields.
-	hasFrom := td.BranchFromThought != nil
-	hasID := td.BranchID != ""
-	if hasFrom != hasID {
-		return errors.New("branchFromThought and branchId must both be present or both omitted")
-	}
-	if hasFrom && *td.BranchFromThought < 1 {
-		return fmt.Errorf("branchFromThought must be ≥ 1 (got %d)", *td.BranchFromThought)
-	}
-	if td.RevisesThought != nil && *td.RevisesThought < 1 {
-		return fmt.Errorf("revisesThought must be ≥ 1 (got %d)", *td.RevisesThought)
+	if *td.NextThoughtNeeded && strings.TrimSpace(td.NextStepRationale) == "" {
+		return errors.New("nextStepRationale required when nextThoughtNeeded is true; send one, or set nextThoughtNeeded=false if this line of thinking is done")
 	}
 
+	// Revision and branch fields each come as a pair or not at all.
+	if td.IsRevision != (td.RevisesThought != 0) {
+		return errors.New("set isRevision=true together with revisesThought ≥ 1, or omit both")
+	}
+	if td.RevisesThought < 0 {
+		return fmt.Errorf("revisesThought must be ≥ 1 (got %d)", td.RevisesThought)
+	}
+	if (td.BranchFromThought != 0) != (td.BranchID != "") {
+		return errors.New("send branchFromThought ≥ 1 together with branchId, or omit both")
+	}
+	if td.BranchFromThought < 0 {
+		return fmt.Errorf("branchFromThought must be ≥ 1 (got %d)", td.BranchFromThought)
+	}
 	return nil
 }

@@ -1,95 +1,46 @@
 package thinking
 
 import (
-	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-// errorPayload is the JSON shape ProcessThought emits on an error result.
-type errorPayload struct {
-	Error  string `json:"error"`
-	Status string `json:"status"`
-	Hint   string `json:"hint"`
-}
-
-func TestValidatePathErrorCarriesHint(t *testing.T) {
-	s := NewServer()
-	td := validInput(1)
-	td.NextStepRationale = "" // Validate() fails: required when nextThoughtNeeded=true
-	res, err := s.ProcessThought(td)
-	if err != nil {
-		t.Fatalf("unexpected go error: %v", err)
-	}
-	if !res.IsError {
-		t.Fatal("expected IsError=true")
-	}
-	var p errorPayload
-	if err := json.Unmarshal([]byte(res.Text), &p); err != nil {
-		t.Fatalf("error result is not JSON: %v\n%s", err, res.Text)
-	}
-	if p.Status != "failed" {
-		t.Errorf("status = %q, want failed", p.Status)
-	}
-	if p.Hint != requiredFieldsChecklist {
-		t.Errorf("hint = %q, want the shared checklist", p.Hint)
-	}
-	// The hint must name every required field.
+// TestHintNamesEveryRequiredField guards the self-correcting hint: a caller
+// that fails validation must be able to fix the call from the hint alone.
+func TestHintNamesEveryRequiredField(t *testing.T) {
 	for _, f := range []string{
 		"thought", "thoughtNumber", "totalThoughts", "nextThoughtNeeded",
 		"confidence", "assumptions", "critique", "counterArgument", "nextStepRationale",
 	} {
-		if !strings.Contains(p.Hint, f) {
-			t.Errorf("hint missing required field %q: %s", f, p.Hint)
+		if !regexp.MustCompile(`\b` + f + `\b`).MatchString(requiredFieldsChecklist) {
+			t.Errorf("checklist missing required field %q as a whole word: %s", f, requiredFieldsChecklist)
 		}
 	}
 }
 
-func TestRangeErrorOmitsHint(t *testing.T) {
-	s := NewServer()
-	if _, err := s.ProcessThought(validInput(1)); err != nil {
-		t.Fatal(err)
-	}
-	td := validInput(2)
-	td.IsRevision = boolPtr(true)
-	td.RevisesThought = intPtr(99) // out of range -> ProcessThought range error, not Validate()
-	res, err := s.ProcessThought(td)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !res.IsError {
-		t.Fatal("expected IsError=true")
-	}
-	var p errorPayload
-	if err := json.Unmarshal([]byte(res.Text), &p); err != nil {
-		t.Fatalf("error result is not JSON: %v", err)
-	}
-	if p.Hint != "" {
-		t.Errorf("range error must not carry a hint; got %q", p.Hint)
-	}
-	// The hint key must be absent from the wire, not present-but-empty.
-	var raw map[string]any
-	if err := json.Unmarshal([]byte(res.Text), &raw); err != nil {
-		t.Fatalf("error result is not JSON: %v", err)
-	}
-	if _, ok := raw["hint"]; ok {
-		t.Errorf("range error must not carry a hint key on the wire; got %s", res.Text)
-	}
-}
-
+// TestToolDescriptionContractGuards pins the parts of the description that
+// other components depend on: the shared checklist, the statelessness
+// statement, and the absence of the removed episode discipline.
 func TestToolDescriptionContractGuards(t *testing.T) {
 	for _, want := range []string{
-		requiredFieldsChecklist,   // front-loaded checklist (single source)
-		"episodeId",               // isolation discipline is documented
-		"unrelated problem",       // the episodeId switch guidance
-		"current episode's trunk", // corrected per-episode confidence line (substring chosen to survive the line-wrap in the description text)
+		requiredFieldsChecklist,
+		"keeps nothing between calls",
+		"Your own context is the record",
+		"after the first",                                   // the restatement norm exempts thought 1
+		"this line of thinking",                             // nextThoughtNeeded is gate-scoped, matching the skill
+		"sit in\n0.8–0.9, the field is telling you nothing", // calibration heuristic shared with the skill
 	} {
 		if !strings.Contains(ToolDescription, want) {
 			t.Errorf("ToolDescription missing %q", want)
 		}
 	}
-	// The stale connection-wide confidence phrasing must be gone.
-	if strings.Contains(ToolDescription, "(mean of trunk thoughts)") {
-		t.Error("ToolDescription still has the pre-episode confidence phrasing")
+	for _, stale := range []string{"episodeId", "session confidence", "sessionConfidence", "thoughtHistoryLength"} {
+		if strings.Contains(ToolDescription, stale) {
+			t.Errorf("ToolDescription still mentions removed %q", stale)
+		}
+	}
+	if n := strings.Count(ToolDescription, "\n"); n > 80 {
+		t.Errorf("ToolDescription is %d lines; keep it under 80 so the contract stays readable", n)
 	}
 }

@@ -1,100 +1,65 @@
 package thinking
 
-// ToolDescription is the verbatim description string registered on the
-// criticalthinking MCP tool. Every agent calling the tool reads this — it is
-// the prompt-engineering contract for thinking out loud + critical self-
-// examination on top of sequential thinking.
-//
-// Treat changes here as protocol changes: bump the package version and
-// document in the README migration notes.
-const ToolDescription = `A tool for *critical*, *narrated*, *sequential* problem-solving. Think one
-step at a time, out loud, and interrogate each thought as it lands. This tool
-fuses three disciplines:
+// ToolDescription is the verbatim description registered on the
+// criticalthinking MCP tool. Every agent calling the tool reads it — it is the
+// prompt-engineering contract for narrated, critically examined, sequential
+// thinking. Treat changes here as protocol changes: add a migration note.
+const ToolDescription = `A tool for critical, narrated, sequential problem-solving: one thought per
+call, said out loud in first person, and interrogated in the same call.
 
-  1. Sequential thinking — break the problem into ordered, numbered steps. Each
-     thought builds on the previous ones; you can revise earlier steps and branch
-     into alternatives when the path forks.
-  2. Thinking out loud — explain each thought in first-person, exploratory voice.
-     The act of putting half-formed reasoning into words is itself a check on it:
-     vague thought stays vague until you have to say it. Externalizing the
-     thinking is what surfaces the assumptions you didn't know you were making.
-  3. Critical self-examination — every thought is paired with confidence,
-     assumptions, critique, and a counter-argument. You produce the thought,
-     then you interrogate it, in the same call.
-
-Sequential thinking is the *spine*. Thinking out loud is the *voice*. Critical
-self-examination is the *check*. Skipping any one of them is a misuse.
+Three disciplines, all required:
+  1. Sequential — number your thoughts and build each on the ones before.
+     Revise an earlier one (isRevision + revisesThought) when a critique shows
+     it was wrong; branch (branchFromThought + branchId) when the path forks.
+  2. Out loud — write the thought in exploratory, first-person voice. Hedges,
+     false starts, and self-corrections belong in it: putting half-formed
+     reasoning into words is itself the check on it. Not polished prose.
+  3. Critical — pair every thought with confidence, assumptions, critique, and
+     a counter-argument, then let them change the next thought.
 
 Required fields — ` + requiredFieldsChecklist + `
 
-Isolating episodes:
-  - Tag each independent line of reasoning with a stable episodeId (any string).
-    Reuse the same episodeId for every thought in one problem; switch to a new
-    one when you start an unrelated problem. Omitting it routes to a shared
-    "default" episode — fine for a single line of reasoning, but parallel
-    subagents or unrelated problems then contaminate each other's history and
-    confidence. episodeId is echoed back so you can confirm routing.
+Stateless: this tool keeps nothing between calls. It validates and narrates
+the one thought you send; it has never seen your earlier ones.
+Your own context is the record, so open each thought after the first by
+restating what the previous one concluded and what its critique changed, and set confidence by
+comparing it with the confidences you already assigned: if they all sit in
+0.8–0.9, the field is telling you nothing.
 
-How a session unfolds:
+Fields:
+  - thought: one thought, first person, exploratory.
+  - thoughtNumber / totalThoughts (both ≥ 1): where you are and your current
+    estimate of the whole. Adjust totalThoughts as understanding evolves; if
+    thoughtNumber exceeds it, the server raises totalThoughts to match.
+  - nextThoughtNeeded: false only when this line of thinking is genuinely done.
+  - nextStepRationale (required when nextThoughtNeeded=true): why THIS is the
+    next thought — what this one ruled out, opened up, or exposed.
+  - confidence (0.0–1.0): how sure you are, honestly. 0.5 is a coin flip;
+    above 0.8 needs evidence, not enthusiasm.
+  - assumptions (string[]): what you are taking for granted, one per entry,
+    none blank. Send [] only if you genuinely claim there are none.
+  - critique: what is weak, suspect, or under-examined in this thought.
+    "Looks good" is not a critique.
+  - counterArgument: the strongest case against this thought. If you cannot
+    find one, your confidence is wrong.
+  - isRevision + revisesThought (always together): this thought corrects an
+    earlier one; say in the critique why the earlier one was wrong.
+  - branchFromThought + branchId (always together): this thought explores an
+    alternative from an earlier point; keep one branchId per alternative.
 
-  - You start at thoughtNumber=1 with an estimated totalThoughts. Each call
-    produces one thought + its critique. The next call builds on what came
-    before — including, importantly, on what your own critique surfaced.
-  - When a critique reveals that an earlier thought was wrong, use isRevision
-    + revisesThought to revisit it. The new critique should explain *why*
-    the old one was wrong.
-  - When the path forks and you want to explore an alternative, use
-    branchFromThought + branchId together. Branches accumulate their own
-    running confidence average — if a branch is averaging 0.4, that's a
-    signal the path is shaky.
-  - Adjust totalThoughts as understanding evolves. Set nextThoughtNeeded=false
-    only when the work is genuinely done.
-
-For each call, you write ONE thought as if explaining it out loud to yourself.
-Then, in the same call, you provide:
-
-  - confidence (0.0–1.0): How sure are you, *honestly*? 0.5 means a coin flip.
-                          High confidence (>0.8) requires evidence, not enthusiasm.
-  - assumptions (string[]): What are you taking for granted? List them. If you
-                            genuinely believe there are none, send [] and own that
-                            claim.
-  - critique (string, required, non-empty): What is weak, suspect, or
-                            under-examined about the thought you just produced?
-                            "Looks good" is not a critique. Be your own toughest
-                            reviewer.
-  - counterArgument (string, required, non-empty): The strongest case AGAINST
-                            this thought. Steelman the opposition. If you can't
-                            think of one, your confidence is wrong.
-  - nextStepRationale (string, required when nextThoughtNeeded=true):
-                            Why is *this* the next thought, not some other one?
-                            What did this one rule out, open up, or expose?
-
-Voice and register for the thought field:
-  - First-person, narrative, exploratory. "I think... but wait... actually..."
-  - Include hedges, false starts, and self-corrections — that's the exploratory
-    register, not noise.
-  - The aim is to externalize the thinking, not to perform polished prose.
-    Putting thought into words is the double-check; vague thought stays vague.
-  - This is NOT polished prose. Polished prose hides uncertainty. Be messy and
-    honest.
-
-Anti-patterns to avoid:
-  - Producing thoughts in isolation, not building on prior steps. Sequential
-    means each thought *uses* what came before — including your own prior
-    critiques.
+Anti-patterns:
+  - Thoughts that ignore prior steps. Sequential means each thought uses what
+    came before, including your own earlier critiques.
   - Boilerplate critique ("could be improved"). Be specific.
-  - Confidence inflation. If everything is 0.9, the field is uninformative.
-  - Skipping counterArgument by claiming there is none. There always is one.
-  - Treating critique/counterArgument as paperwork. They exist to change your
-    next thought, not to satisfy the schema.
+  - Confidence inflation.
+  - Claiming there is no counter-argument. There always is one.
+  - Treating critique and counterArgument as paperwork. They exist to change
+    your next thought, not to satisfy the schema.
+  - Opening a thought after the first without saying what the previous one
+    concluded and what its critique changed.
 
-What you get back:
-  - A narrated transcript of this thought (first-person, exploratory voice).
-  - Running session confidence — the mean over the current episode's trunk
-    thoughts. Trustworthy only when you reuse a consistent episodeId.
-  - Per-branch confidence (if any branches exist).
-  - The full state needed to plan the next call.
+Returns the narrated transcript of this thought plus its routing fields
+(thoughtNumber, totalThoughts, nextThoughtNeeded, confidence) echoed back.
 
-Use this when the problem deserves slow, examined, multi-step thinking. Don't
-use it for trivia or one-step lookups — the ceremony will get in the way. Use
-it when being wrong is expensive.`
+Use this when being wrong is expensive and the problem deserves slow,
+examined, multi-step thinking. Not for trivia or one-step lookups.`
