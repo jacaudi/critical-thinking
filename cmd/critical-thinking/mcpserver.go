@@ -128,17 +128,20 @@ func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier, registry *
 		}
 	}
 
-	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+	// The SDK deprecated its CrossOriginProtection option in v1.6.1 in favour
+	// of wrapping the handler (staticcheck SA1019 had been failing lint on main
+	// since). With the option unset the SDK applies no origin check of its own,
+	// so this wrap is the whole CSRF layer.
+	handler := csrf.Handler(mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		state := thinking.NewServer()
 		registry.add()
 		slog.Debug("http session created", "sessionsCreated", registry.count())
 		return newMCPServer(state)
 	}, &mcp.StreamableHTTPOptions{
-		SessionTimeout:        idleTimeout,
-		CrossOriginProtection: csrf,
-	})
+		SessionTimeout: idleTimeout,
+	}))
 
-	var mcpEndpoint http.Handler = handler
+	mcpEndpoint := handler
 	if verifier != nil {
 		mcpEndpoint = requireAuth(verifier, handler)
 	}

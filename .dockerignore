@@ -4,6 +4,7 @@
 .worktrees
 docs
 .claude
+.devcontainer
 .private-journal
 .vscode
 .idea
