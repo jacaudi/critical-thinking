@@ -20,14 +20,12 @@ import (
 // a one-line summary — never to stdout.
 var errCLIFailed = errors.New("cli: input failed")
 
-// runCLI runs the thinking engine over a plain stdin→stdout loop (no MCP).
-// One in-memory thinking.NewServer() lives for the call, so history,
-// confidence, and branches accumulate across input lines — the analog of a
-// stdio MCP session. Input is NDJSON: one ThoughtData per non-blank line.
-// Output is NDJSON too: one structured ThoughtResponse per processed line.
-// Returns 0 if every line succeeded, 1 if any line errored.
+// runCLI runs the engine over a plain stdin→stdout loop (no MCP). Input is
+// NDJSON: one ThoughtData per non-blank line, each processed independently —
+// the engine keeps nothing between lines. Output is NDJSON too: one structured
+// ThoughtResponse per processed line. Returns 0 if every line succeeded, 1 if
+// any line errored.
 func runCLI(stdin io.Reader, stdout, stderr io.Writer) int {
-	state := thinking.NewServer()
 	sc := bufio.NewScanner(stdin)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // tolerate long thoughts
 	lineNo := 0
@@ -38,7 +36,7 @@ func runCLI(stdin io.Reader, stdout, stderr io.Writer) int {
 		if len(line) == 0 {
 			continue
 		}
-		if !processOne(state, line, fmt.Sprintf("line %d", lineNo), stdout, stderr) {
+		if !processOne(line, fmt.Sprintf("line %d", lineNo), stdout, stderr) {
 			failed = true
 		}
 	}
@@ -52,14 +50,14 @@ func runCLI(stdin io.Reader, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// processOne unmarshals one ThoughtData JSON document from raw, processes it
-// against state, and writes the result — the single source of the per-input
-// contract shared by the stream loop and --once. src labels the input in
-// diagnostics ("line 3", "argument", "stdin"). Success emits StructuredJSON
-// to stdout; an IsError result emits the engine's error JSON to stdout too,
-// so the NDJSON stream stays line-aligned. Malformed input is diagnosed on
-// stderr only. Returns false if the input failed.
-func processOne(state *thinking.SequentialThinkingServer, raw []byte, src string, stdout, stderr io.Writer) bool {
+// processOne unmarshals one ThoughtData JSON document from raw, runs it
+// through the engine, and writes the result — the single source of the
+// per-input contract shared by the stream loop and --once. src labels the
+// input in diagnostics ("line 3", "argument", "stdin"). Success emits the
+// structured response to stdout; an engine error result emits the engine's
+// error JSON to stdout too, so the NDJSON stream stays line-aligned. Malformed
+// input is diagnosed on stderr only. Returns false if the input failed.
+func processOne(raw []byte, src string, stdout, stderr io.Writer) bool {
 	var td thinking.ThoughtData
 	// Write errors on stdout/stderr aren't actionable here; the return value
 	// already reflects per-input success.
@@ -67,21 +65,20 @@ func processOne(state *thinking.SequentialThinkingServer, raw []byte, src string
 		_, _ = fmt.Fprintf(stderr, "cli: %s: %v\n", src, err)
 		return false
 	}
-	res, err := state.ProcessThought(td)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "cli: %s: %v\n", src, err)
-		return false
-	}
+	res := thinking.Process(td)
 	if res.IsError {
 		_, _ = fmt.Fprintln(stdout, res.Text) // error JSON keeps NDJSON aligned
 		return false
 	}
-	_, _ = fmt.Fprintln(stdout, res.StructuredJSON)
+	// A fixed-shape struct of ints, a bool, and a validated float cannot fail
+	// to marshal.
+	structured, _ := json.Marshal(res.Structured)
+	_, _ = fmt.Fprintln(stdout, string(structured))
 	return true
 }
 
-// runOnce processes exactly one ThoughtData through a fresh in-memory server
-// and exits — the single-shot analog of runCLI for scripting/testing (#74).
+// runOnce processes exactly one ThoughtData and exits — the single-shot
+// analog of runCLI for scripting/testing (#74).
 // The document comes from arg when non-nil, else from ALL of stdin — one JSON
 // document, so pretty-printed multi-line JSON is fine, unlike the NDJSON
 // loop. Empty input and trailing data after the document are unmarshal
@@ -94,8 +91,8 @@ func runOnce(arg *string, stdin io.Reader, stdout, stderr io.Writer) int {
 		raw, src = []byte(*arg), "argument"
 	} else {
 		// Unbounded by design: the stream loop's 1 MiB buffer is a
-		// bufio.Scanner token-size mechanism, not an input-size contract
-		// (serve mode reads unbounded JSON-RPC frames too). Design §5.2.
+		// bufio.Scanner token-size mechanism, not an input-size contract; the
+		// HTTP transport's 4 MiB cap is the SDK's, for network callers.
 		b, err := io.ReadAll(stdin)
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "cli: read: %v\n", err)
@@ -103,7 +100,7 @@ func runOnce(arg *string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		raw = b
 	}
-	if processOne(thinking.NewServer(), raw, src, stdout, stderr) {
+	if processOne(raw, src, stdout, stderr) {
 		return 0
 	}
 	return 1
@@ -114,7 +111,7 @@ func runOnce(arg *string, stdin io.Reader, stdout, stderr io.Writer) int {
 // processes EVERY line, then returns errCLIFailed iff any line failed, so the
 // exit code is 1 without fail-fast (pin 1). --once instead processes exactly
 // one ThoughtData — from the positional argument, or stdin when omitted —
-// against a fresh server, and exits 0/1 (#74).
+// and exits 0/1 (#74).
 func newCliCmd() *cobra.Command {
 	var once bool
 	cmd := &cobra.Command{

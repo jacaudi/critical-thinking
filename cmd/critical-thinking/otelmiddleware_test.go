@@ -3,13 +3,10 @@ package main
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/jacaudi/critical-thinking/internal/thinking"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -42,28 +39,12 @@ func setupTestTelemetry(t *testing.T) (*tracetest.InMemoryExporter, *sdkmetric.M
 	return exp, reader
 }
 
-// newTelemetryTestServer builds the same handler stack runHTTP uses (minus
-// otelhttp, which Task 7 adds) around fresh per-session state — the same
-// construction as the existing TestCrossSessionIsolation setup
-// (mcpserver_test.go:260-273).
-func newTelemetryTestServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-		return newMCPServer(thinking.NewServer())
-	}, nil)
-	mux := http.NewServeMux()
-	mux.Handle("/mcp", handler)
-	ts := httptest.NewServer(withCORS(mux, nil))
-	t.Cleanup(ts.Close)
-	return ts
-}
-
 func TestMiddlewareRecordsToolCallSpan(t *testing.T) {
 	exp, _ := setupTestTelemetry(t)
-	ts := newTelemetryTestServer(t)
+	ts := newTestServer(t)
 
-	client := newHTTPClient(t, ts.URL)
-	client.callTool(t, validInputN(1, "otel"))
+	cs := newTestClient(t, ts.URL)
+	callTool(t, cs, validInputN(1, "otel"))
 
 	var toolSpan *tracetest.SpanStub
 	for _, s := range exp.GetSpans() {
@@ -92,13 +73,13 @@ func TestMiddlewareRecordsToolCallSpan(t *testing.T) {
 
 func TestMiddlewareRecordsCallMetrics(t *testing.T) {
 	_, reader := setupTestTelemetry(t)
-	ts := newTelemetryTestServer(t)
+	ts := newTestServer(t)
 
-	client := newHTTPClient(t, ts.URL)
-	client.callTool(t, validInputN(1, "otel"))
+	cs := newTestClient(t, ts.URL)
+	callTool(t, cs, validInputN(1, "otel"))
 
 	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(context.Background(), &rm); err != nil {
+	if err := reader.Collect(t.Context(), &rm); err != nil {
 		t.Fatal(err)
 	}
 	calls := findMetric(t, rm, "ct.mcp.calls")
@@ -140,10 +121,14 @@ func findMetric(t *testing.T, rm metricdata.ResourceMetrics, name string) metric
 
 func TestToolSpanCarriesDomainAttributes(t *testing.T) {
 	exp, _ := setupTestTelemetry(t)
-	ts := newTelemetryTestServer(t)
+	ts := newTestServer(t)
 
-	client := newHTTPClient(t, ts.URL)
-	client.callTool(t, validInputN(3, "otel-domain"))
+	cs := newTestClient(t, ts.URL)
+	td := validInputN(3, "otel-domain")
+	td.TotalThoughts = 2 // thoughtNumber 3 > totalThoughts 2: the response is clamped, the span is not
+	if resp := callTool(t, cs, td); resp.TotalThoughts != 3 {
+		t.Errorf("response TotalThoughts = %d, want clamped 3", resp.TotalThoughts)
+	}
 
 	var toolSpan *tracetest.SpanStub
 	for _, s := range exp.GetSpans() {
@@ -162,8 +147,8 @@ func TestToolSpanCarriesDomainAttributes(t *testing.T) {
 	if got := attrs["ct.thought_number"].AsInt64(); got != 3 {
 		t.Errorf("ct.thought_number = %d, want 3", got)
 	}
-	if got := attrs["ct.total_thoughts"].AsInt64(); got != 20 {
-		t.Errorf("ct.total_thoughts = %d, want 20", got)
+	if got := attrs["ct.total_thoughts"].AsInt64(); got != 2 {
+		t.Errorf("ct.total_thoughts = %d, want 2 (as sent, pre-clamp)", got)
 	}
 	if got := attrs["ct.confidence"].AsFloat64(); got != 0.5 {
 		t.Errorf("ct.confidence = %v, want 0.5", got)
@@ -171,61 +156,10 @@ func TestToolSpanCarriesDomainAttributes(t *testing.T) {
 	if attrs["ct.is_revision"].AsBool() || attrs["ct.is_branch"].AsBool() {
 		t.Errorf("is_revision/is_branch should be false for a plain trunk thought")
 	}
-	if got := attrs["ct.history_length"].AsInt64(); got != 1 {
-		t.Errorf("ct.history_length = %d, want 1", got)
-	}
-	if got := attrs["ct.episode_id"].AsString(); got != "default" {
-		t.Errorf("ct.episode_id = %q, want default", got)
-	}
-}
-
-// TestSessionAndEvictionCounters drives 65 distinct episodes directly through
-// the state machine (bypassing HTTP) to trigger exactly one LRU eviction
-// (defaultMaxEpisodes is 64), then asserts both unattributed counters wired
-// in newMCPServer.
-func TestSessionAndEvictionCounters(t *testing.T) {
-	_, reader := setupTestTelemetry(t)
-
-	state := thinking.NewServer()
-	_ = newMCPServer(state) // wires OnEvict and counts one session
-
-	// Drive 65 distinct episodes straight through the state machine: the
-	// 65th exceeds defaultMaxEpisodes(64) and evicts one.
-	yes := true
-	for i := 1; i <= 65; i++ {
-		_, err := state.ProcessThought(thinking.ThoughtData{
-			Thought:           "t",
-			ThoughtNumber:     1,
-			TotalThoughts:     1,
-			NextThoughtNeeded: &yes,
-			Confidence:        0.5,
-			Assumptions:       []string{},
-			Critique:          "c",
-			CounterArgument:   "ca",
-			// Required because NextThoughtNeeded is true (schema.go Validate);
-			// omitted in the task-5 brief's snippet, which made every call fail
-			// validation silently (ProcessThought's Go-level err stays nil for
-			// validation failures) and never created an episode to evict.
-			NextStepRationale: "n",
-			EpisodeID:         "ep-" + strconv.Itoa(i),
-		})
-		if err != nil {
-			t.Fatal(err)
+	for _, removed := range []attribute.Key{"ct.history_length", "ct.episode_id"} {
+		if _, present := attrs[removed]; present {
+			t.Errorf("stateless server must not emit %s", removed)
 		}
-	}
-
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(context.Background(), &rm); err != nil {
-		t.Fatal(err)
-	}
-
-	created := findMetric(t, rm, "ct.sessions.created").Data.(metricdata.Sum[int64])
-	if got := created.DataPoints[0].Value; got != 1 {
-		t.Errorf("ct.sessions.created = %d, want 1", got)
-	}
-	evicted := findMetric(t, rm, "ct.episodes.evicted").Data.(metricdata.Sum[int64])
-	if got := evicted.DataPoints[0].Value; got != 1 {
-		t.Errorf("ct.episodes.evicted = %d, want 1", got)
 	}
 }
 
@@ -234,12 +168,12 @@ func TestSessionAndEvictionCounters(t *testing.T) {
 // never reach telemetry.
 func TestSpansNeverContainReasoningContent(t *testing.T) {
 	exp, _ := setupTestTelemetry(t)
-	ts := newTelemetryTestServer(t)
+	ts := newTestServer(t)
 
 	const sentinel = "SECRET-REASONING-CONTENT-9c4f"
 	yes := true
-	client := newHTTPClient(t, ts.URL)
-	client.callTool(t, thinking.ThoughtData{
+	cs := newTestClient(t, ts.URL)
+	callTool(t, cs, thinking.ThoughtData{
 		Thought:           sentinel + " thought",
 		ThoughtNumber:     1,
 		TotalThoughts:     2,
@@ -274,26 +208,22 @@ func TestSpansNeverContainReasoningContent(t *testing.T) {
 func TestOtelHTTPWrapperPreservesStreamingAndEmitsServerSpans(t *testing.T) {
 	exp, _ := setupTestTelemetry(t)
 
-	// buildHTTPHandler (from #75) is the single source of truth for the
-	// /mcp+/health+CORS wiring; nil verifier = auth disabled. otelHTTPHandler
-	// wraps its returned handler exactly as runHTTP does.
-	h, err := buildHTTPHandler(httpConfig{}, nil, newSessionRegistry())
-	if err != nil {
-		t.Fatalf("buildHTTPHandler: %v", err)
-	}
-	ts := httptest.NewServer(otelHTTPHandler(h))
-	t.Cleanup(ts.Close)
+	ts := newTestServer(t)
 
 	// Full MCP flow through the wrapped stack — fails if Flusher is lost.
-	client := newHTTPClient(t, ts.URL)
-	client.callTool(t, validInputN(1, "otelhttp"))
+	cs := newTestClient(t, ts.URL)
+	callTool(t, cs, validInputN(1, "otelhttp"))
 
 	// /health must NOT produce spans.
+	before := len(exp.GetSpans())
 	resp, err := http.Get(ts.URL + "/health")
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
+	if got := len(exp.GetSpans()); got != before {
+		t.Errorf("/health produced %d span(s); liveness probes must be filtered", got-before)
+	}
 
 	// otelHTTPHandler passes otelhttp.WithSpanNameFormatter(... return "mcp") —
 	// the operation arg to NewHandler does NOT set the span name in v0.69.0 (its
@@ -304,9 +234,6 @@ func TestOtelHTTPWrapperPreservesStreamingAndEmitsServerSpans(t *testing.T) {
 	for _, s := range exp.GetSpans() {
 		if s.Name == "mcp" {
 			sawHTTPSpan = true
-		}
-		if strings.Contains(s.Name, "health") {
-			t.Errorf("unexpected span for /health: %q", s.Name)
 		}
 	}
 	if !sawHTTPSpan {

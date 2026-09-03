@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"slices"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -19,22 +18,16 @@ import (
 	"github.com/jacaudi/critical-thinking/internal/thinking"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
 
-const (
-	idleTimeout   = 60 * time.Minute
-	shutdownGrace = 10 * time.Second
-)
+const shutdownGrace = 10 * time.Second
 
-// runStdio runs the server with one global SequentialThinkingServer instance.
-// One process = one session, no cross-stream risk by definition.
+// runStdio serves one MCP session over stdin/stdout. The server holds no
+// state, so the single process-wide *mcp.Server is the whole story.
 func runStdio() error {
-	state := thinking.NewServer()
-	srv := newMCPServer(state)
+	srv := newMCPServer()
 
 	var transport mcp.Transport = &mcp.StdioTransport{}
 	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
@@ -48,20 +41,9 @@ func runStdio() error {
 	return nil
 }
 
-// runHTTP starts a Streamable HTTP server. Each session gets its own
-// *mcp.Server with its own SequentialThinkingServer, constructed inside the
-// factory closure. There is no map keyed by session-id anywhere in this
-// process — the closure scope is the cross-session isolation invariant.
-//
-// Idle-session lifecycle is delegated to the SDK via
-// StreamableHTTPOptions.SessionTimeout: the SDK closes its own per-session
-// state after idleTimeout of inactivity, releasing the bound *mcp.Server (and
-// the *SequentialThinkingServer it captures) for GC.
-//
-// We keep a small in-process registry that counts every session ever created.
-// The registry is NOT synchronized with the SDK's view of live sessions — once
-// the SDK closes a session we have no callback, so the count drifts upward.
-// /health exposes it as `sessionsCreated` to make the semantics explicit.
+// runHTTP serves Streamable HTTP in the SDK's stateless mode (MCP protocol
+// 2026-07-28): no Mcp-Session-Id, no per-connection state, every POST is a
+// complete unit of work. See buildHTTPHandler.
 func runHTTP(cfg httpConfig, addr string) error {
 	if err := cfg.validateAuth(); err != nil {
 		return err // fail fast: never bind a port with auth misconfigured
@@ -82,8 +64,7 @@ func runHTTP(cfg httpConfig, addr string) error {
 		slog.Warn("OIDC authentication DISABLED (CTHINK_OIDC_ISSUER not set); /mcp is unauthenticated")
 	}
 
-	registry := newSessionRegistry()
-	rootHandler, err := buildHTTPHandler(cfg, verifier, registry)
+	rootHandler, err := buildHTTPHandler(cfg, verifier)
 	if err != nil {
 		return err
 	}
@@ -113,14 +94,27 @@ func runHTTP(cfg httpConfig, addr string) error {
 	return nil
 }
 
-// buildHTTPHandler assembles the full HTTP handler chain and is the single source of truth for the
-// /mcp+/health wiring, called by runHTTP in production and by the integration tests directly.
-// /mcp is wrapped by requireAuth iff verifier != nil; /health is always bare; withCORS is outermost.
-func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier, registry *sessionRegistry) (http.Handler, error) {
-	// Wire the configured allowed origins (CTHINK_ALLOWED_ORIGINS) into the SDK's
-	// CSRF protection so browser clients from those origins aren't rejected by the
-	// SDK's default same-origin policy. Non-browser callers (no Origin /
-	// no Sec-Fetch-Site) are still allowed regardless.
+// buildHTTPHandler assembles the HTTP handler chain and is the single source
+// of truth for the /mcp + /health wiring, used by runHTTP and the tests.
+//
+// One *mcp.Server serves every request. The CSRF layer is Go's
+// http.CrossOriginProtection wrapping the MCP handler (the SDK's own option
+// has been deprecated since v1.6.1). StreamableHTTPOptions.Stateless makes
+// the SDK ignore Mcp-Session-Id entirely, answer GET and DELETE with 405, and
+// accept MCP protocol 2026-07-28 (the sessionless model); older clients still
+// get their initialize answered by a per-request temporary session. Request
+// bodies are capped at the SDK default (4 MiB → 413).
+//
+// /mcp is wrapped by requireAuth iff verifier != nil; /health is always bare;
+// withCORS is the outermost layer this function builds; runHTTP wraps the
+// result in otelHTTPHandler.
+func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier) (http.Handler, error) {
+	// Register the configured browser origins (CTHINK_ALLOWED_ORIGINS) with
+	// Go's CrossOriginProtection, the CSRF layer that wraps the MCP handler
+	// below. withCORS (outermost) is a separate, stricter allow-list: it
+	// rejects any Origin not in the list, including same-origin requests that
+	// CrossOriginProtection alone would permit. Non-browser callers (no Origin,
+	// no Sec-Fetch-Site) pass both.
 	csrf := http.NewCrossOriginProtection()
 	for _, o := range cfg.AllowedOrigins {
 		if err := csrf.AddTrustedOrigin(o); err != nil {
@@ -129,17 +123,14 @@ func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier, registry *
 	}
 
 	// The SDK deprecated its CrossOriginProtection option in v1.6.1 in favour
-	// of wrapping the handler (staticcheck SA1019 had been failing lint on main
-	// since). With the option unset the SDK applies no origin check of its own,
-	// so this wrap is the whole CSRF layer.
-	handler := csrf.Handler(mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		state := thinking.NewServer()
-		registry.add()
-		slog.Debug("http session created", "sessionsCreated", registry.count())
-		return newMCPServer(state)
-	}, &mcp.StreamableHTTPOptions{
-		SessionTimeout: idleTimeout,
-	}))
+	// of wrapping the handler. With the option unset the SDK applies no origin
+	// check of its own, so this wrap is the whole CSRF layer. (Unless
+	// MCPGODEBUG=enableoriginverification=1 is set, which makes the SDK add a
+	// zero-trust check of its own; do not set it.)
+	srv := newMCPServer()
+	handler := csrf.Handler(mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return srv },
+		&mcp.StreamableHTTPOptions{Stateless: true}))
 
 	mcpEndpoint := handler
 	if verifier != nil {
@@ -148,7 +139,7 @@ func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier, registry *
 
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcpEndpoint)
-	mux.HandleFunc("/health", makeHealthHandler(registry))
+	mux.HandleFunc("/health", healthHandler)
 	return withCORS(mux, cfg.AllowedOrigins), nil
 }
 
@@ -156,38 +147,27 @@ func buildHTTPHandler(cfg httpConfig, verifier *oidc.IDTokenVerifier, registry *
 // which already applies withCORS as its outermost layer) in otelhttp, keeping
 // otelhttp OUTERMOST so CORS/CSRF rejections are traced too. /health is filtered
 // from telemetry — liveness probes would otherwise emit a span every few seconds
-// forever. runHTTP and the HTTP integration test both wrap buildHTTPHandler's
-// output with this.
+// forever.
 func otelHTTPHandler(inner http.Handler) http.Handler {
 	// otelhttp v0.69.0 ignores the operation arg ("mcp") for span naming — its
 	// default names spans from semconv SpanName (method, or method+route, e.g.
-	// "POST /mcp"). WithSpanNameFormatter forces the stable "mcp" name the
-	// design intends (and that the test below asserts).
+	// "POST /mcp"). WithSpanNameFormatter forces the stable "mcp" name.
 	return otelhttp.NewHandler(inner, "mcp",
 		otelhttp.WithSpanNameFormatter(func(string, *http.Request) string { return "mcp" }),
 		otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/health" }))
 }
 
-// newMCPServer constructs a configured *mcp.Server with the criticalthinking
-// tool registered. The state argument is captured by the tool handler — this
-// is how per-session isolation works in HTTP mode (each call to this function
-// inside the StreamableHTTP factory closure produces a server bound to a fresh
-// state). Stdio mode calls it once with a single global state.
-func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
+// newMCPServer constructs the *mcp.Server with the criticalthinking tool
+// registered. The tool handler is a pure function, so one server is shared by
+// every session and every request; so ReadOnlyHint and OpenWorldHint below
+// are literally true (IdempotentHint is spec-inert once ReadOnlyHint is set,
+// and DestructiveHint likewise).
+func newMCPServer() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "critical-thinking",
 		Version: version,
 	}, nil)
 	srv.AddReceivingMiddleware(otelMiddleware())
-
-	meter := otel.Meter(instrumentationScope)
-	sessionsCreated, _ := meter.Int64Counter("ct.sessions.created",
-		metric.WithDescription("MCP server sessions created (monotonic; there is deliberately no active-sessions gauge)"))
-	sessionsCreated.Add(context.Background(), 1)
-
-	episodesEvicted, _ := meter.Int64Counter("ct.episodes.evicted",
-		metric.WithDescription("Thinking episodes evicted by the per-session LRU cap"))
-	state.OnEvict = func() { episodesEvicted.Add(context.Background(), 1) }
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "criticalthinking",
@@ -198,99 +178,36 @@ func newMCPServer(state *thinking.SequentialThinkingServer) *mcp.Server {
 			IdempotentHint:  true,
 			OpenWorldHint:   new(false),
 		},
-	}, makeToolHandler(state))
-
-	srv.AddResource(&mcp.Resource{
-		Name:        "thinking_current",
-		Description: "Full thought history for the current session, including all critical-thinking fields (confidence, assumptions, critique, counterArgument).",
-		URI:         "thinking://current",
-		MIMEType:    "application/json",
-	}, makeResourceHandler(state))
+	}, handleThought)
 
 	return srv
 }
 
-// makeToolHandler closes over a per-session state and returns the Go SDK's
-// expected handler signature. The second return value (any) becomes the
-// CallToolResult's structuredContent — we send the parsed ThoughtResponse.
-func makeToolHandler(state *thinking.SequentialThinkingServer) func(context.Context, *mcp.CallToolRequest, thinking.ThoughtData) (*mcp.CallToolResult, any, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, args thinking.ThoughtData) (*mcp.CallToolResult, any, error) {
-		span := trace.SpanFromContext(ctx)
-		span.SetAttributes(
-			attribute.Int("ct.thought_number", args.ThoughtNumber),
-			attribute.Int("ct.total_thoughts", args.TotalThoughts),
-			attribute.Float64("ct.confidence", args.Confidence),
-			attribute.Bool("ct.is_revision", args.IsRevision != nil && *args.IsRevision),
-			attribute.Bool("ct.is_branch", args.BranchFromThought != nil && args.BranchID != ""),
-		)
+// handleThought adapts thinking.Process to the SDK's typed tool handler. The
+// second return value becomes structuredContent.
+func handleThought(ctx context.Context, _ *mcp.CallToolRequest, td thinking.ThoughtData) (*mcp.CallToolResult, any, error) {
+	// Bounded domain attributes only — reasoning text never reaches telemetry.
+	// Attributes reflect the request as sent; ct.total_thoughts is pre-clamp.
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.Int("ct.thought_number", td.ThoughtNumber),
+		attribute.Int("ct.total_thoughts", td.TotalThoughts),
+		attribute.Float64("ct.confidence", td.Confidence),
+		attribute.Bool("ct.is_revision", td.IsRevision),
+		attribute.Bool("ct.is_branch", td.BranchID != ""),
+	)
 
-		res, err := state.ProcessThought(args)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		callResult := &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: res.Text}},
-			IsError: res.IsError,
-		}
-
-		if res.IsError {
-			return callResult, nil, nil
-		}
-
-		var structured thinking.ThoughtResponse
-		if jsonErr := json.Unmarshal([]byte(res.StructuredJSON), &structured); jsonErr != nil {
-			// Should not happen — ProcessThought just produced this JSON.
-			return callResult, nil, nil
-		}
-
-		span.SetAttributes(
-			attribute.Int("ct.history_length", structured.ThoughtHistoryLength),
-			// episodeId is client-controlled: allowed on spans, NEVER on metrics.
-			attribute.String("ct.episode_id", structured.EpisodeID),
-		)
-		return callResult, structured, nil
+	res := thinking.Process(td)
+	out := &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: res.Text}},
+		IsError: res.IsError,
 	}
-}
-
-// makeResourceHandler closes over a per-session state and returns a
-// ResourceHandler that always returns this session's snapshot, regardless of
-// the requested URI. We deliberately do NOT support a thinking://sessions
-// listing or thinking://{id} lookup — that would expose the existence of
-// other sessions and violate the cross-session isolation invariant.
-func makeResourceHandler(state *thinking.SequentialThinkingServer) func(context.Context, *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-	return func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		snap := state.Snapshot()
-		body, err := json.MarshalIndent(snap, "", "  ")
-		if err != nil {
-			return nil, err
-		}
-		return &mcp.ReadResourceResult{
-			Contents: []*mcp.ResourceContents{{
-				URI:      req.Params.URI,
-				MIMEType: "application/json",
-				Text:     string(body),
-			}},
-		}, nil
+	if res.IsError {
+		// Return an untyped nil: with Out = any the SDK's typed-nil guard does
+		// not run, and a typed nil would serialise as "structuredContent": null.
+		return out, nil, nil
 	}
+	return out, res.Structured, nil
 }
-
-// sessionRegistry counts every session ever created in this process. It holds
-// only a monotonic counter — never the session states themselves — so closed
-// sessions are not pinned here: the factory closure that created a state holds
-// the only live reference, leaving the state eligible for GC once the SDK
-// releases it. Treat the count as a lifetime "sessions created" counter, not an
-// "active right now" gauge.
-type sessionRegistry struct {
-	created atomic.Int64
-}
-
-func newSessionRegistry() *sessionRegistry { return &sessionRegistry{} }
-
-// add records that a session was created.
-func (r *sessionRegistry) add() { r.created.Add(1) }
-
-func (r *sessionRegistry) count() int { return int(r.created.Load()) }
 
 // withCORS gates browser access via the configured allowed-origins list
 // (CTHINK_ALLOWED_ORIGINS). Empty means no browser origins allowed.
@@ -298,25 +215,28 @@ func (r *sessionRegistry) count() int { return int(r.created.Load()) }
 // When an origin matches:
 //   - Access-Control-Allow-Origin: <origin>
 //   - Access-Control-Allow-Credentials: true
-//   - Access-Control-Expose-Headers: mcp-session-id  (so JS clients can read it)
 //   - Vary: Origin                                   (cache-poisoning mitigation)
+//
+// The server is stateless, so only POST (and the OPTIONS preflight) are
+// advertised. Authorization is allowed so browser clients can present OIDC
+// bearer tokens; mcp-session-id stays allowed so preflights from older clients
+// that still send it succeed (the server ignores the header).
 //
 // Non-browser callers (no Origin header) bypass the check entirely.
 func withCORS(h http.Handler, allowed []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" {
+			w.Header().Add("Vary", "Origin")
 			if !slices.Contains(allowed, origin) {
 				http.Error(w, "Origin not allowed", http.StatusForbidden)
 				return
 			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Expose-Headers", "mcp-session-id")
-			w.Header().Add("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, MCP-Protocol-Version")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, MCP-Protocol-Version")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
@@ -341,21 +261,19 @@ func parseAllowedOrigins(raw string) []string {
 	return out
 }
 
-func makeHealthHandler(r *sessionRegistry) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		body := struct {
-			Status          string `json:"status"`
-			Transport       string `json:"transport"`
-			SessionsCreated int    `json:"sessionsCreated"`
-			Version         string `json:"version"`
-		}{
-			Status:          "ok",
-			Transport:       "streamable-http",
-			SessionsCreated: r.count(),
-			Version:         version,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(body)
+// healthHandler reports liveness. The server keeps no sessions, so there is
+// nothing to count beyond "up" and which build this is.
+func healthHandler(w http.ResponseWriter, _ *http.Request) {
+	body := struct {
+		Status    string `json:"status"`
+		Transport string `json:"transport"`
+		Version   string `json:"version"`
+	}{
+		Status:    "ok",
+		Transport: "streamable-http",
+		Version:   version,
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(body)
 }
