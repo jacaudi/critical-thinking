@@ -1,5 +1,5 @@
 {
-  "description": "critical-thinking plugin: install the MCP binary at session start, and force the two-gate discipline on every prompt.",
+  "description": "critical-thinking plugin: install the MCP binary at session start, and inject the two-gate protocol into every prompt.",
   "hooks": {
     "SessionStart": [
       {

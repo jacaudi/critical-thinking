@@ -64,6 +64,7 @@ tasks:
       - bash plugins/critical-thinking/test/hooks_json_test.sh
       - bash plugins/critical-thinking/test/install-binary_test.sh
       - bash plugins/critical-thinking/test/activate_test.sh
+      - bash plugins/critical-thinking/test/skill_test.sh
   ci:
     desc: Everything CI runs, in CI's order (keep in sync with .github/actions/tests/action.yml)
     cmds:
