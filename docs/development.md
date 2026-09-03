@@ -14,13 +14,25 @@ The `-X main.version=...` flag stamps the build with a version string surfaced v
 
 ## Test
 
+All verification targets live in [`taskfile.yml`](../taskfile.yml); CI runs the same targets, so `task ci` locally is CI.
+
 ```bash
-go test -race -count=1 ./...   # full suite, race detector on, no test cache
-go vet ./...                    # static checks
-gofmt -d .                      # diff against gofmt; empty output = clean
+task ci          # gofmt, vet, golangci-lint, govulncheck, plugin lint+tests, go test -race, build
+task test-race   # just the Go suite, race detector on, no test cache
 ```
 
-`-race` is the standard mode for this project. Concurrency invariants in the HTTP path are non-trivial (per-session factory closures, session registry mutex) and `go test` without `-race` will not catch their regressions.
+`-race` is the standard mode for this project: one `*mcp.Server` serves every HTTP request concurrently, and the OpenTelemetry middleware binds instruments once per process, so plain `go test` would miss data races on those paths.
+
+### Dev container
+
+`.devcontainer/` defines a container with the Go toolchain, Task, `jq`, and `shellcheck` — everything the targets need. With the [Dev Containers CLI](https://github.com/devcontainers/cli):
+
+```bash
+devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . task ci
+```
+
+VS Code users can open the folder in the container directly.
 
 ## Debugging with MCP Inspector
 
@@ -35,7 +47,7 @@ critical-thinking serve --http :3000 &
 npx @modelcontextprotocol/inspector --uri http://localhost:3000/mcp
 ```
 
-The inspector lets you call `criticalthinking` interactively, watch the rendered transcript, and read the `thinking://current` resource without writing client code.
+The inspector lets you call `criticalthinking` interactively and watch the rendered transcript without writing client code.
 
 ## Project layout
 
@@ -45,31 +57,39 @@ The inspector lets you call `criticalthinking` interactively, watch the rendered
 │   ├── main.go                   # entry point: builds the root command, maps errors to exit codes
 │   ├── root.go                   # root command, persistent --verbose/--log-format flags
 │   ├── serve.go                  # `serve` command: stdio vs --http path selection
-│   ├── mcpserver.go              # MCP server wiring (stdio + Streamable HTTP), CORS/CSRF, /health
+│   ├── mcpserver.go              # MCP server wiring (stdio + stateless Streamable HTTP), CORS, /health
+│   ├── auth.go                   # OIDC bearer-token verification for /mcp
+│   ├── otel.go                   # OpenTelemetry providers (CTHINK_OTEL_ENABLED)
+│   ├── otelmiddleware.go         # per-method spans and ct.mcp.* metrics
 │   ├── cli.go                    # `cli` command: NDJSON stdin→stdout, no MCP host
 │   ├── config.go                 # Viper config (CTHINK_ prefix), httpConfig
 │   ├── logging.go                # slog logger construction (text|json → stderr)
 │   ├── schema.go                 # `schema` command: prints the tool contract
 │   ├── version.go                # `version` command + --version text
-│   └── *_test.go                 # command + integration tests (cross-session isolation, etc.)
+│   └── *_test.go                 # command + integration tests (SDK-client stateless tests, auth, OTel, no-process-state guard)
 ├── internal/thinking/
 │   ├── description.go            # tool description (the prompt-engineering contract)
 │   ├── schema.go                 # ThoughtData / ThoughtResponse + Validate()
-│   ├── server.go                 # SequentialThinkingServer state machine
-│   └── *_test.go                 # unit tests
-├── Dockerfile                    # multi-stage, distroless final
+│   ├── process.go                # Process(): the pure per-call engine
+│   ├── transcript.go             # the narrated transcript renderer
+│   └── *_test.go                 # unit tests, incl. the no-state/no-SDK boundary guard
+├── plugins/critical-thinking/    # Claude Code plugin: skill, hooks, install script, shell tests
+├── docs/                         # this documentation; docs/plans/ is local-only
+├── scripts/                      # semantic-release helpers (version bumps)
+├── .github/                      # CI (calls the taskfile targets) and release workflows
+├── .devcontainer/                # Go + Task + jq + shellcheck; `task ci` runs here
+├── taskfile.yml                  # every build/lint/test target; `ci` = what CI runs
+└── Dockerfile                    # multi-stage, distroless final
 ```
 
-The `internal/thinking` package has zero dependency on the MCP SDK — the
-`cmd/critical-thinking` package is the only adapter. That keeps the state
-machine fully unit-testable. The same applies to OpenTelemetry: all
-instrumentation lives in `cmd/critical-thinking` (`otel.go`,
-`otelmiddleware.go`); `internal/thinking` exposes only a plain `OnEvict
-func()` callback that the adapter wires to a counter.
+The `internal/thinking` package has zero dependency on the MCP SDK and holds no
+state — `Process` is a pure function — so it is fully unit-testable and safe
+under any concurrency. All OpenTelemetry instrumentation lives in
+`cmd/critical-thinking` (`otel.go`, `otelmiddleware.go`).
 
 ## Release workflow
 
-CI runs on push and PR via GitHub Actions: `vet`, `gofmt`, `go test -race -count=1 ./...`, and a Docker build. Releases are tag-driven; tagging `vX.Y.Z` triggers the release workflow which builds and pushes the multi-arch Docker image to `ghcr.io/jacaudi/critical-thinking:vX.Y.Z` and updates `:latest`.
+CI runs on push and PR via GitHub Actions — the same `task ci` targets listed above (gofmt, vet, golangci-lint, govulncheck, plugin lint+tests, `go test -race`, build). Releases are cut by semantic-release on every push to `main`: it reads the conventional commits, creates the `vX.Y.Z` tag and GitHub release (goreleaser attaches the binaries), and the release workflow then builds and pushes the multi-arch Docker image to `ghcr.io/jacaudi/critical-thinking:vX.Y.Z` and updates `:latest`. Nobody tags by hand; see [CONTRIBUTING.md](../CONTRIBUTING.md) for the commit-type → release mapping.
 
 ## Treating the description as a protocol
 

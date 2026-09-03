@@ -4,7 +4,7 @@
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `CTHINK_ALLOWED_ORIGINS` | (empty) | Comma-separated list of browser origins permitted to call `/mcp`. Wired into both the outer CORS layer and the SDK's CSRF protection (`http.CrossOriginProtection.AddTrustedOrigin`). Default rejects all browser origins. Non-browser callers (no `Origin` / no `Sec-Fetch-Site` header) are unaffected. |
+| `CTHINK_ALLOWED_ORIGINS` | (empty) | Comma-separated list of browser origins permitted to call `/mcp`. Wired into both the outer CORS allow-list and Go's CSRF layer (`http.CrossOriginProtection.AddTrustedOrigin`) that wraps the MCP handler. Default rejects all browser origins. Non-browser callers (no `Origin` / no `Sec-Fetch-Site` header) are unaffected. |
 | `CTHINK_HTTP_HOST` | `127.0.0.1` | Host the HTTP server binds to. Set to `0.0.0.0` to bind all interfaces (the published Docker image sets this). |
 | `CTHINK_OIDC_ISSUER` | (empty) | OIDC issuer URL for bearer-token auth on `/mcp`. **Empty disables auth** (default; preserves prior behavior). When set, every `/mcp` request must carry a valid `Authorization: Bearer <jwt>`. The server performs OIDC discovery at startup and **fails to start** if the issuer is unreachable. |
 | `CTHINK_OIDC_AUDIENCE` | (empty) | Expected `aud` claim. **Required when `CTHINK_OIDC_ISSUER` is set** — the server refuses to start otherwise (an empty audience would disable audience validation). |
@@ -24,7 +24,7 @@ settings, precedence is **flag > env > default** (e.g. `--log-format` overrides
 critical-thinking serve
 ```
 
-One process serves one session. There is no cross-stream isolation concern because there is no second stream — the process IS the session. Use this for direct integration with MCP hosts (Claude Desktop, Codex CLI, VS Code).
+One process, one stdin/stdout pair. The server keeps no state, so nothing accumulates over the life of the process. Use this for direct integration with MCP hosts (Claude Desktop, Codex CLI, VS Code).
 
 ### Streamable HTTP
 
@@ -32,7 +32,9 @@ One process serves one session. There is no cross-stream isolation concern becau
 critical-thinking serve --http :3000
 ```
 
-The HTTP server binds to `127.0.0.1` by default (set `CTHINK_HTTP_HOST=0.0.0.0` to bind all interfaces). Each session gets its own `*mcp.Server` with its own `SequentialThinkingServer`, constructed inside a factory closure — there is no map keyed by session ID anywhere, by design. The closure scope is the cross-session isolation invariant.
+The HTTP server binds to `127.0.0.1` by default (set `CTHINK_HTTP_HOST=0.0.0.0` to bind all interfaces). It runs in the MCP SDK's **stateless mode**, which is how the SDK serves MCP protocol `2026-07-28` (the sessionless model): the server neither issues nor reads `Mcp-Session-Id`, each `POST /mcp` is complete in itself, and `GET`/`DELETE /mcp` answer `405 Method Not Allowed`. Older clients that still send `initialize` (protocol `2025-11-25` and earlier) are answered normally by a temporary per-request session. One `*mcp.Server` serves every request, so replicas behind a load balancer need no session affinity. Request bodies are capped at the SDK default of 4 MiB (`413` beyond that).
+
+If a client insists on the pre-sessionless behaviour (session ids echoed back, `DELETE` accepted), the SDK offers a temporary compatibility switch: run the server with `MCPGODEBUG=allowsessionsinstateless=1`. It is slated for removal in go-sdk v1.9.0; treat it as a bridge, not a setting.
 
 ## Logging
 
@@ -55,20 +57,16 @@ the caller decide.
 
 | Path | Methods | Purpose |
 |---|---|---|
-| `/mcp` | `POST`, `GET`, `DELETE` | Main MCP endpoint (Streamable HTTP) |
-| `/health` | `GET` | Returns `{status, transport, sessionsCreated, version}`. `sessionsCreated` is a **lifetime** counter of sessions ever created in this process; it is NOT pruned when the SDK closes idle sessions. Treat it as a creation counter, not an active-session gauge. |
+| `/mcp` | `POST` (`OPTIONS` preflight via CORS; `GET`/`DELETE` → `405`) | Main MCP endpoint (Streamable HTTP, stateless) |
+| `/health` | `GET` | Returns `{status, transport, version}`. |
 
-## Session lifecycle
-
-Sessions are in-memory only. Idle sessions expire after **1 hour**, enforced by the SDK via `StreamableHTTPOptions.SessionTimeout`. When the SDK closes a session, the bound `*mcp.Server` (and the `*SequentialThinkingServer` it captures) becomes unreachable and is released for GC.
-
-There is no callback fired when the SDK closes a session, so the in-process registry that powers `/health.sessionsCreated` drifts upward — that's intentional. If you need an accurate active-session count, get it from your reverse proxy or load balancer, not from this server.
+A `POST /mcp` must carry `Content-Type: application/json` and an `Accept` header that lists both `application/json` and `text/event-stream`; the SDK answers `415`/`400` otherwise. MCP clients do this automatically — it only matters for hand-written `curl` calls.
 
 ## CORS and CSRF
 
-When `CTHINK_ALLOWED_ORIGINS` is empty, browser requests with an `Origin` header are rejected with HTTP 403. Non-browser clients (no `Origin`, no `Sec-Fetch-Site`) bypass the check entirely. When set, matching origins receive `Access-Control-Allow-Origin: <origin>`, `Access-Control-Allow-Credentials: true`, `Access-Control-Expose-Headers: mcp-session-id`, and a `Vary: Origin` header for cache-poisoning mitigation.
+When `CTHINK_ALLOWED_ORIGINS` is empty, browser requests with an `Origin` header are rejected with HTTP 403. Non-browser clients (no `Origin`, no `Sec-Fetch-Site`) bypass the check entirely. When set, matching origins receive `Access-Control-Allow-Origin: <origin>`, `Access-Control-Allow-Credentials: true`, and a `Vary: Origin` header for cache-poisoning mitigation. Every response advertises `Access-Control-Allow-Methods: POST, OPTIONS` and `Access-Control-Allow-Headers: Content-Type, Authorization, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, mcp-session-id` — `Authorization` so browser clients can present OIDC bearer tokens, `Mcp-Method` and `Mcp-Name` because protocol `2026-07-28` sends them on every request, `mcp-session-id` so preflights from older clients that still send it succeed (the server ignores the header). The allow-list wraps the whole mux, so a browser `Origin` outside it is refused on `/health` too; probes without an `Origin` are unaffected.
 
-The same origin list is registered with the SDK's CSRF protection (`http.CrossOriginProtection.AddTrustedOrigin`) so the SDK's same-origin policy doesn't double-reject permitted browser callers.
+The same origin list is registered with Go's `http.CrossOriginProtection`, which wraps the MCP handler (the SDK's own cross-origin option has been deprecated since go-sdk v1.6.1 and is not used), so a permitted browser origin is not double-rejected by a same-origin policy.
 
 ## Authentication (OIDC bearer tokens)
 
@@ -105,7 +103,7 @@ When `CTHINK_OIDC_ISSUER` is set (and `CTHINK_OIDC_AUDIENCE` provided):
   does not break verification of already-seen signing keys. A token that cannot be cryptographically
   verified is always rejected — the server never falls back to accepting unverified tokens.
 
-Authentication is orthogonal to CORS and the SDK's `CrossOriginProtection`: all three apply
+Authentication is orthogonal to CORS and Go's `CrossOriginProtection` layer: all three apply
 independently.
 
 ## Observability (OpenTelemetry)
@@ -131,14 +129,12 @@ Signals emitted:
 
 | Signal | What |
 |---|---|
-| Span `mcp.<method>` | One server span per JSON-RPC method on both transports; `tools/call` spans carry `mcp.tool.name` and bounded domain attributes (`ct.thought_number`, `ct.total_thoughts`, `ct.confidence`, `ct.is_revision`, `ct.is_branch`, `ct.history_length`, `ct.episode_id`). |
+| Span `mcp.<method>` | One server span per JSON-RPC method on both transports; `tools/call` spans carry `mcp.tool.name` and bounded domain attributes (`ct.thought_number`, `ct.total_thoughts`, `ct.confidence`, `ct.is_revision`, `ct.is_branch`). |
 | HTTP server spans/metrics | From `otelhttp` around `/mcp` (`/health` is excluded). |
 | `ct.mcp.calls` | Counter by `mcp.method` + `ct.outcome` (`ok`/`error`/`tool_error`). |
 | `ct.mcp.duration` | Histogram (seconds) by `mcp.method`. |
-| `ct.sessions.created` | Monotonic sessions-created counter (there is deliberately no active-sessions gauge — the server has no accurate live count by design). |
-| `ct.episodes.evicted` | LRU episode evictions. |
 
 Privacy: the content of `thought`, `assumptions`, `critique`,
 `counterArgument`, and `nextStepRationale` is never attached to any span or
-metric, and `episodeId` never appears as a metric label. This is enforced
-by tests.
+metric (enforced by a test over every recorded span), and the only metric
+labels are the fixed `mcp.method` and `ct.outcome` values.
