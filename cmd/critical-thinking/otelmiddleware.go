@@ -25,11 +25,13 @@ const instrumentationScope = "github.com/jacaudi/critical-thinking"
 // NAME is read from CallToolParamsRaw. Reasoning content (thought, critique,
 // counterArgument, assumptions, nextStepRationale) must never reach telemetry.
 //
-// Tracer, meter, and instruments are resolved here (per server construction,
-// i.e. per session in HTTP mode) rather than at package init so they bind to
-// whatever provider is installed at the time — the real one in serve, or a
-// test's in-memory one. Duplicate instrument registration with an identical
-// identity is defined by the OTel spec to return the same instrument.
+// Tracer, meter, and instruments are resolved here, once per process (there
+// is one shared *mcp.Server), rather than at package init, so they bind to
+// whatever provider is installed at the time. In production that is the real
+// provider: serve.go runs setupOTel before the server is built, and even if it
+// did not, the OTel globals re-point instruments to the first provider that is
+// installed. Only a *second* install (a test swapping providers) requires the
+// server to be constructed after it — see setupTestTelemetry.
 func otelMiddleware() mcp.Middleware {
 	tracer := otel.Tracer(instrumentationScope)
 	meter := otel.Meter(instrumentationScope)

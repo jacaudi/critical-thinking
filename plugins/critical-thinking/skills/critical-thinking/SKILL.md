@@ -1,122 +1,72 @@
 ---
 name: critical-thinking
-description: Mandatory critical-thinking gates that verify intent before work and verify results before responding, using the criticalthinking MCP tool. Always on for substantive prompts.
+description: Mandatory critical-thinking gates that verify intent before acting and verify results before responding, using the criticalthinking MCP tool. Always on for substantive prompts.
 disable-model-invocation: false
 user-invocable: true
 ---
 
 # Critical Thinking Verification
 
-**Every substantive prompt requires two verification gates using the `criticalthinking` tool. No exceptions.**
+**Every substantive prompt gets two verification gates through the `criticalthinking` tool. No exceptions.**
 
-This rule applies to all prompts that involve action, analysis, or decision-making. Trivial acknowledgements ("thanks", "got it") are exempt.
+A substantive prompt involves action, analysis, or a decision. Trivial acknowledgements ("thanks", "got it") are exempt.
 
-The tool's fully-qualified id under this plugin is `mcp__plugin_critical-thinking_critical-thinking__criticalthinking`; it is referred to as `criticalthinking` below.
+`criticalthinking` means the tool whose leaf name is `criticalthinking`, whatever server prefix your host adds. Under this plugin's own stdio registration it appears as `mcp__plugin_critical-thinking_critical-thinking__criticalthinking`; behind a gateway it carries a different prefix. Match the leaf name.
 
----
+## Gate 1 — intent, before acting
 
-## Gate 1: Intent Verification (Before Starting Work)
+After reading the prompt and whatever orientation the task needs (files, docs, recent history), and **before any edit, state-changing command, or answer**, run a `criticalthinking` sequence that:
 
-After receiving a user prompt, **before doing anything else**, call `criticalthinking` to:
+1. Restates the ask in your own words
+2. Separates the real ask from the stated ask (they often differ)
+3. Names the assumptions you are about to make
+4. Flags ambiguities that could send you the wrong way
+5. Decides whether to ask a clarifying question or proceed
 
-1. Restate what the user is asking in your own words
-2. Identify the real ask vs. the stated ask (they often differ)
-3. Surface assumptions you're about to make
-4. Flag ambiguities that could send you in the wrong direction
-5. Decide whether to ask clarifying questions or proceed
+Only then begin the work.
 
-**Use extended thinking throughout this gate.** Think through edge cases, implicit requirements, and unstated context.
+## Gate 2 — result, before responding
 
-Only after this gate passes should you begin work (research, coding, planning, etc.).
+After the work is done — or, when Gate 1 decided to ask a clarifying question, once that question is drafted — and **before presenting anything**, run a `criticalthinking` sequence that:
 
----
+1. Checks the result answers what was asked, not what you assumed
+2. Looks for logic errors, missed requirements, and drift from the original intent
+3. Confirms completeness — the full scope, not only the easy part
+4. Names anything uncertain or unfinished
+5. Decides what caveats or follow-ups the answer needs
 
-## Gate 2: Result Verification (Before Responding)
+Use extended thinking throughout both gates and the work between them. The gates are checkpoints; the thinking is continuous.
 
-After completing work but **before presenting results to the user**, call `criticalthinking` to:
+## The tool is stateless
 
-1. Verify the result actually answers what was asked (not what you assumed)
-2. Check for logical errors, missed requirements, or drift from the original intent
-3. Confirm completeness — did you address the full scope or only part?
-4. Identify anything that should be flagged as uncertain or incomplete
-5. Decide if the answer needs caveats or follow-up suggestions
+`criticalthinking` validates and narrates the one thought you send and remembers nothing: no history, no running confidence, nothing to isolate. Nothing you send is carried into another call. (This describes the server this plugin installs; if your host points the tool at an older server, follow the tool description you are actually served.) Your own context is the record:
 
-**Use extended thinking throughout this gate.** Challenge your own work before presenting it.
+- Reread your earlier gate thoughts before writing the next one, and build on your own critiques.
+- Keep `thoughtNumber` sequential yourself. Send `isRevision` and `revisesThought` together, and `branchFromThought` and `branchId` together, pointing only at thoughts you actually wrote.
+- Judge your calibration across your own thoughts: if every confidence sits in 0.8–0.9, the field is telling you nothing.
 
----
-
-## Extended Thinking: Use Liberally
-
-Between the two gates, continue to use extended thinking for any non-trivial reasoning step. The gates are checkpoints; thinking is continuous.
-
----
-
-## Isolate each task with a stable episodeId
-
-Pass a stable `episodeId` (any string — e.g. a short slug for the current task)
-and **reuse it for both gates of the same prompt**. This keeps a task's intent
-and result verification together and isolated from other tasks, other prompts,
-and other projects sharing the same MCP connection. Without it, every call lands
-in one shared "default" episode and `sessionConfidence` / history are averaged
-across unrelated reasoning. Start a new `episodeId` when you move to an
-unrelated task.
-
----
-
-## Tool Failure Protocol
+## Tool failure protocol
 
 **If `criticalthinking` is unavailable at any point — HALT IMMEDIATELY.**
 
-"Unavailable" means the tool is absent from the available tools list, or a call returns a connection/transport error. A schema-validation error is NOT unavailability — that is a caller bug to fix.
+"Unavailable" means no tool with the leaf name `criticalthinking` is in your tool list, or a call returns a connection or transport error. A schema-validation error is NOT unavailability; that is a caller bug to fix and retry.
 
-Do not:
-- Silently continue without verification
-- Substitute your own internal reasoning as "good enough"
-- Mention the failure in passing and proceed anyway
-- Retry silently and pretend it worked
-- Silently fall back to `mcp__sequential-thinking__sequentialthinking` or plain prose
+Do not: continue without verification; treat your own reasoning as "good enough"; mention the failure in passing and proceed; retry silently and pretend it worked; fall back to `mcp__sequential-thinking__sequentialthinking` or plain prose.
 
-Do:
-- Stop all work in progress
-- Tell the user explicitly: "The criticalthinking tool is unavailable. I cannot verify my understanding/results without it. How would you like to proceed?"
-- Wait for user direction before continuing
+Do: stop all work in progress; tell the user "The criticalthinking tool is unavailable. I cannot verify my understanding/results without it. How would you like to proceed?" — offering to proceed without it; wait for direction. If the user then tells you to proceed without the tool, do so: that waiver holds for the rest of the conversation unless they revoke it, and every answer you give ungated says so plainly.
 
-**This is a hard stop, not a soft warning.** The verification gates exist because unverified work causes bugs. Skipping them silently defeats the purpose.
+This is a hard stop, not a soft warning. Unverified work causes bugs.
 
----
+## Scaling the gates
 
-## Workflow Summary
+| Prompt | Each gate |
+|---|---|
+| Simple (rename, typo fix, factual answer, short edit) | 2–3 thoughts |
+| Medium (feature, bug fix, a document or analysis with several parts) | 5–7 thoughts |
+| Complex (architecture, multi-file change, research with competing options) | 10+ thoughts |
 
-```
-User prompt received
-  │
-  ▼
-GATE 1: Intent Verification  (criticalthinking → understand; extended thinking ON)
-  │  (If tool unavailable → HALT, alert user)
-  ▼
-WORK: Execute the task       (extended thinking throughout)
-  │
-  ▼
-GATE 2: Result Verification  (criticalthinking → validate; extended thinking ON)
-  │  (If tool unavailable → HALT, alert user)
-  ▼
-Present verified results to user
-```
-
----
-
-## Scaling
-
-| Complexity | Gate 1 Depth | Gate 2 Depth |
-|-----------|--------------|--------------|
-| Simple (rename, typo fix) | 2-3 thoughts | 2-3 thoughts |
-| Medium (feature, bug fix) | 5-7 thoughts | 5-7 thoughts |
-| Complex (architecture, multi-file) | 10+ thoughts | 10+ thoughts |
-
-Scale verification depth to task complexity. Simple tasks still get verified — just briefly.
-
----
+These are guides, not quotas — count thoughts, not questions: one thought may answer several of a gate's five questions. End a gate as soon as they are honestly answered: set `nextThoughtNeeded=false` and move on. Simple prompts still get both gates, briefly — including a bare approval or continuation ("yes", "go ahead"), where Gate 1 restates what is being approved.
 
 ## Relationship to sequential-thinking
 
-`criticalthinking` is sequential-thinking with the discipline enforced by the schema (required `confidence`, `assumptions`, `critique`, `counterArgument`, `nextStepRationale`). When this skill is active, use `criticalthinking` for both gates — do not fall back to `mcp__sequential-thinking__sequentialthinking`, which has the weaker contract.
+`criticalthinking` keeps sequential-thinking's step structure (numbered thoughts, revisions, branches) and adds the discipline the tool enforces: `confidence`, `assumptions`, `critique`, and `counterArgument` on every thought, plus `nextStepRationale` whenever `nextThoughtNeeded=true`. Unlike sequential-thinking, it keeps no history of its own. When this skill is active, use `criticalthinking` for both gates; do not fall back to `mcp__sequential-thinking__sequentialthinking`, which has the weaker contract.

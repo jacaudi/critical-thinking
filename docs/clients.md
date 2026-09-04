@@ -36,7 +36,7 @@ Inside a Claude Code session, `/mcp` shows live status, and the `criticalthinkin
 
 ### Plugin (bundled install)
 
-Instead of the manual `claude mcp add` above, install the in-repo **Claude Code plugin** ([`plugins/critical-thinking/`](../plugins/critical-thinking/)). It registers the MCP server over stdio (downloading the binary automatically), ships the two-gate critical-thinking verification skill, and adds a hook that activates the skill on every prompt. See the [plugin README](../plugins/critical-thinking/README.md) for install, the HTTP-transport variants, and how to disable the always-on hook.
+Instead of the manual `claude mcp add` above, install the in-repo **Claude Code plugin** ([`plugins/critical-thinking/`](../plugins/critical-thinking/)). It registers the MCP server over stdio (downloading the binary automatically), ships the two-gate critical-thinking verification skill, and adds a hook that injects the two-gate protocol into every prompt. See the [plugin README](../plugins/critical-thinking/README.md) for install, the HTTP-transport variants, and how to disable the always-on hook.
 
 ## Claude Desktop
 
@@ -149,12 +149,6 @@ critical-thinking cli --once < thought.json
 critical-thinking schema
 ```
 
-`critical-thinking cli` keeps one in-memory session for the process, so history, confidence, and
-branches accumulate across input lines. Malformed-JSON lines are diagnosed on
-stderr; a line the engine rejects emits its JSON error object to stdout (to keep
-the stream complete) and the process continues; the exit code is `1` if any line
-errored, else `0`.
-
-With `--once`, exactly one thought is processed against a fresh in-memory
-session and the process exits — `0` on success, `1` on any parse or
-validation failure, with the same stderr/stdout routing as stream mode.
+Each input is processed independently; the full stream and `--once` contract
+(error routing, exit codes, the required fields) lives in
+[usage.md](usage.md#as-a-cli-pipe-no-mcp-host).

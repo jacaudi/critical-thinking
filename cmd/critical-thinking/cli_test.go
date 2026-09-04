@@ -21,35 +21,35 @@ func TestRunCLIJSONOutput(t *testing.T) {
 	if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &resp); err != nil {
 		t.Fatalf("stdout is not NDJSON ThoughtResponse: %v\n%s", err, out.String())
 	}
-	if resp.ThoughtNumber != 1 || resp.ThoughtHistoryLength != 1 {
+	if resp.ThoughtNumber != 1 || resp.Confidence != 0.5 {
 		t.Errorf("resp = %+v", resp)
 	}
 }
 
-// TestRunCLIAccumulation pins that one in-memory server lives for the whole
-// call: history accumulates across input lines, visible in the second
-// response's thoughtHistoryLength.
-func TestRunCLIAccumulation(t *testing.T) {
+// TestRunCLILinesAreIndependent: the engine keeps nothing between lines, so
+// two lines with the same thoughtNumber both succeed and echo their own data.
+func TestRunCLILinesAreIndependent(t *testing.T) {
 	in := strings.Join([]string{
-		`{"thought":"first","thoughtNumber":1,"totalThoughts":2,"nextThoughtNeeded":true,"confidence":0.5,"assumptions":[],"critique":"c","counterArgument":"ca","nextStepRationale":"continue"}`,
-		`{"thought":"second","thoughtNumber":2,"totalThoughts":2,"nextThoughtNeeded":false,"confidence":0.7,"assumptions":[],"critique":"c2","counterArgument":"ca2"}`,
+		`{"thought":"a","thoughtNumber":1,"totalThoughts":1,"nextThoughtNeeded":false,"confidence":0.2,"assumptions":[],"critique":"c","counterArgument":"ca"}`,
+		`{"thought":"b","thoughtNumber":1,"totalThoughts":1,"nextThoughtNeeded":false,"confidence":0.9,"assumptions":[],"critique":"c","counterArgument":"ca"}`,
 	}, "\n") + "\n"
-
-	var out, errb bytes.Buffer
-	code := runCLI(strings.NewReader(in), &out, &errb)
-	if code != 0 {
-		t.Fatalf("exit = %d; stderr = %s", code, errb.String())
+	var stdout, stderr bytes.Buffer
+	if code := runCLI(strings.NewReader(in), &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d, stderr=%s", code, stderr.String())
 	}
-	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
 	if len(lines) != 2 {
-		t.Fatalf("want 2 NDJSON lines, got %d:\n%s", len(lines), out.String())
+		t.Fatalf("want 2 output lines, got %d: %q", len(lines), stdout.String())
 	}
-	var resp thinking.ThoughtResponse
-	if err := json.Unmarshal([]byte(lines[1]), &resp); err != nil {
-		t.Fatalf("second line is not a ThoughtResponse: %v\n%s", err, lines[1])
+	var first, second thinking.ThoughtResponse
+	if err := json.Unmarshal([]byte(lines[0]), &first); err != nil {
+		t.Fatal(err)
 	}
-	if resp.ThoughtNumber != 2 || resp.ThoughtHistoryLength != 2 {
-		t.Errorf("second resp = %+v; want thoughtNumber 2, thoughtHistoryLength 2", resp)
+	if err := json.Unmarshal([]byte(lines[1]), &second); err != nil {
+		t.Fatal(err)
+	}
+	if first.Confidence != 0.2 || second.Confidence != 0.9 || first.ThoughtNumber != 1 || second.ThoughtNumber != 1 {
+		t.Errorf("lines not independent: %+v %+v", first, second)
 	}
 }
 
@@ -64,7 +64,7 @@ func TestRunCLIMalformedLineContinues(t *testing.T) {
 	if !strings.Contains(errb.String(), "line 1") {
 		t.Errorf("stderr should reference line 1: %q", errb.String())
 	}
-	if !strings.Contains(out.String(), `"thoughtHistoryLength"`) {
+	if !strings.Contains(out.String(), `"thoughtNumber":1`) {
 		t.Errorf("a valid line after a bad one must still render:\n%s", out.String())
 	}
 }
@@ -107,7 +107,7 @@ func TestCliCmdExitsNonZeroOnAnyFailureAfterProcessingAll(t *testing.T) {
 	if !errors.Is(err, errCLIFailed) {
 		t.Fatalf("Execute() err = %v, want errCLIFailed", err)
 	}
-	if !strings.Contains(out.String(), `"thoughtHistoryLength"`) {
+	if !strings.Contains(out.String(), `"thoughtNumber":1`) {
 		t.Errorf("good line not processed (fail-fast?): %s", out.String())
 	}
 }
@@ -138,7 +138,7 @@ func TestRunOnceArg(t *testing.T) {
 	if err := json.Unmarshal(bytes.TrimSpace(out.Bytes()), &resp); err != nil {
 		t.Fatalf("stdout is not a ThoughtResponse: %v\n%s", err, out.String())
 	}
-	if resp.ThoughtNumber != 1 || resp.ThoughtHistoryLength != 1 {
+	if resp.ThoughtNumber != 1 || resp.Confidence != 0.5 {
 		t.Errorf("resp = %+v", resp)
 	}
 	if errb.Len() != 0 {
@@ -154,7 +154,7 @@ func TestRunOnceStdinFallbackPrettyJSON(t *testing.T) {
 	if code := runOnce(nil, strings.NewReader(pretty), &out, &errb); code != 0 {
 		t.Fatalf("exit = %d; stderr = %s", code, errb.String())
 	}
-	if !strings.Contains(out.String(), `"thoughtHistoryLength":1`) {
+	if !strings.Contains(out.String(), `"thoughtNumber":1,"totalThoughts":1,"nextThoughtNeeded":false,"confidence":0.5`) {
 		t.Errorf("expected one ThoughtResponse on stdout:\n%s", out.String())
 	}
 }
@@ -219,7 +219,7 @@ func TestCliCmdOnceArgSuccess(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() err = %v, want nil", err)
 	}
-	if !strings.Contains(out.String(), `"thoughtHistoryLength":1`) {
+	if !strings.Contains(out.String(), `"thoughtNumber":1,"totalThoughts":1,"nextThoughtNeeded":false,"confidence":0.5`) {
 		t.Errorf("expected one ThoughtResponse on stdout: %s", out.String())
 	}
 }
@@ -234,7 +234,7 @@ func TestCliCmdOnceStdinFallback(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() err = %v, want nil", err)
 	}
-	if !strings.Contains(out.String(), `"thoughtHistoryLength":1`) {
+	if !strings.Contains(out.String(), `"thoughtNumber":1,"totalThoughts":1,"nextThoughtNeeded":false,"confidence":0.5`) {
 		t.Errorf("expected one ThoughtResponse on stdout: %s", out.String())
 	}
 }
