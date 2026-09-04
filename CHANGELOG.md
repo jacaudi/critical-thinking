@@ -1,5 +1,93 @@
 # Changelog
 
+## [1.16.0](https://github.com/jacaudi/critical-thinking/compare/v1.15.1...v1.16.0) (2026-09-04)
+### ⚠ BREAKING CHANGES
+
+* sessionConfidence, branchConfidences, thoughtHistoryLength,
+branches and episodeId are removed from the response; thinking://current,
+ct.sessions.created, ct.episodes.evicted and /health.sessionsCreated are
+gone; isRevision/revisesThought are both-or-neither; whitespace-only strings
+and blank assumptions entries are rejected.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HFU9cTvzfNJTRi45uRVVZs
+
+* feat: serve stateless Streamable HTTP (MCP protocol 2026-07-28)
+
+One shared *mcp.Server serves every request through go-sdk's Stateless mode:
+no Mcp-Session-Id is issued or read, GET and DELETE /mcp answer 405, and the
+sessionless protocol 2026-07-28 is negotiated via server/discover while
+legacy clients' initialize is still answered. The session registry, idle
+timeout, eviction counter, history/episode span attributes and the
+thinking://current resource are removed; /health reports {status, transport,
+version}. CORS advertises POST/OPTIONS and allows Authorization; the CSRF
+layer is Go's CrossOriginProtection wrapping the handler. The CLI processes
+each input independently. Tests use the SDK client and pin the wire facts,
+the trusted-origin path, the 4 MiB body cap, the legacy flow, tool
+annotations, and a no-process-state guard for this package.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HFU9cTvzfNJTRi45uRVVZs
+
+* docs(plugin): skill and hook text for the stateless tool
+
+The skill drops the episodeId discipline and describes the stateless
+contract: the model's own context is the record; Gate 1 runs before any
+edit, state-changing command, or answer with orientation reads allowed;
+the tool is matched by its leaf name whatever prefix the host adds; the
+halt protocol gains an explicit exit (a user's waiver holds for the
+conversation and ungated answers say so); gate depth counts thoughts, not
+questions. The injected hook text says the same things in the same words
+and lists all five questions of each gate. New tests pin every sentence the
+hook and the skill share and reject the vocabulary of the stateful era.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HFU9cTvzfNJTRi45uRVVZs
+
+* fix(http): allow the protocol 2026-07-28 request headers in CORS
+
+MCP protocol 2026-07-28 sends Mcp-Method on every request and Mcp-Name on
+tools/call; without them in Access-Control-Allow-Headers a browser client on
+the current protocol fails preflight. Found while checking the docs against
+the running binary.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HFU9cTvzfNJTRi45uRVVZs
+
+* docs: describe the stateless server
+
+README, usage, configuration, clients, development, migration and
+CONTRIBUTING now describe what the code does: a pure per-call engine, the
+sessionless Streamable HTTP transport (protocol 2026-07-28, no session id,
+GET/DELETE 405, 4 MiB body cap, the MCPGODEBUG bridge), the four-field
+response, the deprecated-but-accepted inputs, the tightened validation, the
+CORS header set, and the taskfile-driven verification that CI and the dev
+container share. The migration entry tells an upgrading caller everything to
+audit. The release process is stated as semantic-release actually runs it.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HFU9cTvzfNJTRi45uRVVZs
+
+* fix: align the tool description with the always-on gates
+
+The description told models the tool is "not for trivia or one-step
+lookups" while the skill and hook gate every substantive prompt; it now
+defers to the host protocol and asks for the shortest honest sequence. The
+four optional pair fields carry schema descriptions stating the
+both-or-neither rule, so a schema-only reader learns it too. Small comment,
+test-message, and doc wording fixes from the final integration review.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HFU9cTvzfNJTRi45uRVVZs
+
+### Features
+
+* stateless server (MCP protocol 2026-07-28) ([#96](https://github.com/jacaudi/critical-thinking/issues/96)) ([92ed9f3](https://github.com/jacaudi/critical-thinking/commit/92ed9f3c5ea745b43ba6ae67751c1ffb86f1ee9b))
+
+### Documentation
+
+* add CONTRIBUTING guide ([#67](https://github.com/jacaudi/critical-thinking/issues/67)) ([de12fa1](https://github.com/jacaudi/critical-thinking/commit/de12fa12fc0a300e4bad8566726d804355124d7c))
+
 ## [1.15.1](https://github.com/jacaudi/critical-thinking/compare/v1.15.0...v1.15.1) (2026-07-17)
 ### Bug Fixes
 
