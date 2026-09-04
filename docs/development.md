@@ -2,7 +2,7 @@
 
 ## Toolchain
 
-Go 1.26+ builds the binary on its own (the MCP SDK is a Go module). The verification targets also need [Task](https://taskfile.dev) and the lint tools listed under the dev container below, which has all of them.
+The Go toolchain version is whatever the `go` directive in [`go.mod`](../go.mod) says (currently 1.27.1); that floor builds the binary on its own (the MCP SDK is a Go module). The verification targets also need [Task](https://taskfile.dev) and the lint tools listed under the dev container below, which has all of them.
 
 ## Build
 
