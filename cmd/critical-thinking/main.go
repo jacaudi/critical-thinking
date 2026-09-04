@@ -1,3 +1,6 @@
+// Package main is the critical-thinking binary: a Model Context Protocol
+// server and CLI for critical, narrated, sequential problem-solving. See
+// newRootCmd in root.go for the subcommand tree (serve, cli, schema, version).
 package main
 
 import "os"

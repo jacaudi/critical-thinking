@@ -1,4 +1,3 @@
----
 # Release pipeline: semantic-release analyses conventional commits on main,
 # decides whether a new version is warranted, and (on release) invokes
 # goreleaser to cross-compile the critical-thinking binary and attach the

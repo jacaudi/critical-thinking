@@ -1,0 +1,26 @@
+# Claude Code plugin checks (plugins/critical-thinking) — shell + JSON, no language module covers it. Local addition; see taskfile.yml.
+version: '3'
+
+vars:
+  PLUGIN: plugins/critical-thinking
+
+tasks:
+  ci:
+    desc: All plugin checks
+    cmds:
+      - task: lint
+      - task: test
+
+  lint:
+    desc: shellcheck the plugin scripts and validate its JSON
+    cmds:
+      - shellcheck {{.PLUGIN}}/hooks/*.sh {{.PLUGIN}}/test/*.sh
+      - 'for f in {{.PLUGIN}}/.mcp.json {{.PLUGIN}}/hooks/hooks.json {{.PLUGIN}}/.claude-plugin/plugin.json; do jq -e . "$f" >/dev/null; done'
+
+  test:
+    desc: Run the plugin shell tests
+    cmds:
+      - bash {{.PLUGIN}}/test/hooks_json_test.sh
+      - bash {{.PLUGIN}}/test/install-binary_test.sh
+      - bash {{.PLUGIN}}/test/activate_test.sh
+      - bash {{.PLUGIN}}/test/skill_test.sh
