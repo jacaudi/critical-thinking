@@ -23,11 +23,10 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
 
 | Type | Effect |
 |------|--------|
-| `fix: ...`, `feat: ...`, `deps: ...` | Queued into the release PR |
+| Any conventional commit (`feat:`, `fix:`, `chore(deps):`, `docs:`, `ci:`, ...) | Queued into the release PR under its changelog section (`style:` is hidden) |
 | `feat!: ...` / `BREAKING CHANGE:` | Queued into the release PR; the major stays at 1 (project policy) |
-| `chore:`, `docs:`, `refactor:`, `test:`, `ci:` | No release on their own; listed in the next release's changelog |
 
-Every release bumps the **minor** version (`versioning: always-bump-minor` in `.github/release-please-config.json`): the project policy is that the major stays at 1, and release-please has no strategy that maps a breaking change to a minor bump while keeping patch bumps for fixes, so a fix-only release is a minor bump too. `chore(deps):` (the Renovate prefix) is not a releasable unit by itself; dependency bumps ship with the next `fix`/`feat`.
+Every release bumps the **minor** version (`versioning: always-bump-minor` in `.github/release-please-config.json`): the project policy is that the major stays at 1, and release-please has no strategy that maps a breaking change to a minor bump while keeping patch bumps for fixes, so a fix-only or deps-only release is a minor bump too. Merge the release PR when you want a release; leave it open to batch more commits into it.
 
 ## The tool description is a protocol
 
