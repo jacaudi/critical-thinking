@@ -6,16 +6,21 @@
     "github>home-operations/renovate-config:annotated.json5"
   ],
   "dependencyDashboardTitle": "Renovate Dashboard 🤖",
-  "docker": {
-    "pinDigests": true
-  },
   "github-actions": {
     "pinDigests": true
   },
   "packageRules": [
     {
+      "matchCategories": [
+        "docker"
+      ],
+      "pinDigests": true
+    },
+    {
       "description": "Bump go.mod requirements to the resolved version instead of leaving a floor",
-      "matchManagers": ["gomod"],
+      "matchManagers": [
+        "gomod"
+      ],
       "rangeStrategy": "bump"
     },
     {
