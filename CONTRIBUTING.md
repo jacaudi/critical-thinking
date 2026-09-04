@@ -9,14 +9,13 @@ The full developer guide lives in **[docs/development.md](docs/development.md)**
 Common tasks are wired into [`taskfile.yml`](taskfile.yml) (install [Task](https://taskfile.dev), then run `task --list`):
 
 ```bash
-task build        # build the binary into bin/
-task test         # go test ./...
+task ci           # everything CI runs, in CI's order
 task test-race    # race detector + coverage (the standard mode for this project)
-task vet          # go vet ./...
 task lint         # golangci-lint run ./...
+task build        # build the binary into bin/
 ```
 
-`-race` is the expected test mode here — the HTTP path has non-trivial concurrency invariants that a plain `go test` will not catch. Run `task vet` and `gofmt -d .` clean before pushing; CI runs `vet`, `gofmt`, `go test -race`, and a Docker build on every push and PR.
+`task ci` runs exactly what CI runs. The `.devcontainer/` folder gives you a container with every tool the targets need (`devcontainer exec --workspace-folder . task ci`); see [docs/development.md](docs/development.md) for why `-race` is the standard mode.
 
 ## Commit messages
 
@@ -26,7 +25,9 @@ Releases are automated with [semantic-release](https://github.com/semantic-relea
 |------|--------|
 | `fix: ...` | Patch release |
 | `feat: ...` | Minor release |
-| `feat!: ...` / `BREAKING CHANGE:` | Major release |
+| `feat!: ...` / `BREAKING CHANGE:` | Minor release (project policy in `.releaserc.json`; the major stays at 1) |
+| `refactor: ...` | Minor release (project policy) |
+| `chore(deps): ...` | Patch release |
 | `chore:`, `docs:`, `test:`, `ci:` | No release |
 
 ## The tool description is a protocol
@@ -37,4 +38,4 @@ The string in [`internal/thinking/description.go`](internal/thinking/description
 
 - Open PRs against `main` from a topic branch.
 - Keep changes focused; include tests for behavior changes (`internal/thinking` is fully unit-testable by design).
-- Make sure `task test-race`, `task vet`, and `task lint` pass locally.
+- Make sure `task ci` passes locally (or in the dev container).

@@ -1,0 +1,6 @@
+{
+  "name": "critical-thinking",
+  "build": { "dockerfile": "Dockerfile" },
+  "appPort": ["127.0.0.1:3000:3000"],
+  "postCreateCommand": "go mod download"
+}

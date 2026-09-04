@@ -2,6 +2,34 @@
 
 Cumulative breaking-change log for `critical-thinking`. Most recent changes first.
 
+## Stateless server (MCP protocol 2026-07-28)
+
+**Breaking.** The server keeps nothing between calls. Every tool call, CLI line, and HTTP request is a pure function of its input.
+
+**Why:** the MCP protocol's `2026-07-28` revision removes sessions (the `initialize` handshake is deprecated and `Mcp-Session-Id` is gone; older clients that still send `initialize` are answered), and the go-sdk serves that revision only when its handler is stateless. Server-side memory was also the root of every isolation bug this project has had (#32): behind a gateway that multiplexes clients through one connection, "per-session" history was shared by everyone.
+
+| Removed | Replacement |
+|---|---|
+| Response fields `sessionConfidence`, `branchConfidences`, `thoughtHistoryLength`, `branches`, `episodeId` | The response is `{thoughtNumber, totalThoughts, nextThoughtNeeded, confidence}`. The caller's own context is the record; it judges calibration across its own thoughts. |
+| Resource `thinking://current` | None — there is no history to read. |
+| Metrics `ct.sessions.created`, `ct.episodes.evicted`; span attributes `ct.history_length`, `ct.episode_id` | `ct.mcp.calls`, `ct.mcp.duration`, and the five bounded `ct.*` domain attributes remain. |
+| `/health` field `sessionsCreated` | `/health` returns `{status, transport, version}`. |
+| Server-side range checks for `revisesThought`/`branchFromThought` | Both are now validated per call: `isRevision` and `revisesThought` must be sent together (both-or-neither, like `branchFromThought`/`branchId`). |
+| HTTP session ids, 60-minute idle timeout, `GET`/`DELETE /mcp` | Stateless mode: no `Mcp-Session-Id` is issued or read; `GET`/`DELETE` → `405`; a stale `Mcp-Session-Id` header is ignored. Bridge for old clients: `MCPGODEBUG=allowsessionsinstateless=1` (slated for removal in go-sdk v1.9.0). |
+| CLI accumulation across lines | Each NDJSON line is independent. |
+
+Also in this release:
+
+- **Schema clean-up.** `isRevision` is a plain `boolean`, `revisesThought` and `branchFromThought` plain `integer`s (no more `["null", …]` unions). The schema change itself rejects only one previously valid shape: an explicit JSON `null` for `isRevision`, `revisesThought`, `branchFromThought`, or `needsMoreThoughts` now fails the MCP input validation (the `cli` path decodes it as absent) — omit the field instead. Three other input rules tightened in this release: the pair rule in the table above (sending `isRevision` or `revisesThought` alone, or `isRevision: false` with a `revisesThought`, is rejected) and the two blank checks below. Audit callers for all four.
+- **Stricter blank checks.** `thought`, `critique`, `counterArgument`, and (when `nextThoughtNeeded=true`) `nextStepRationale` must be non-blank, not merely non-empty: a whitespace-only value is rejected. Every entry of `assumptions` must likewise be non-blank — send `[]` rather than `[""]`.
+- **Deprecated, still accepted:** `episodeId` and `needsMoreThoughts` are accepted and ignored so calls written for v1.15 and earlier keep validating (the schema forbids unknown properties). They will be removed in the next breaking release.
+- **Error results** from the input contract always carry the `hint` checklist now (there are no range errors left to omit it). The SDK's own schema errors (missing required properties, unknown properties) are still plain text with no `hint`, as before.
+- **Transcript text.** The trailing "session confidence … across N thoughts" footer is gone, and a branch thought has one header form (`Branch 'id' from thought K · thought N · confidence X`) instead of two.
+- **CORS:** `Access-Control-Allow-Methods` is `POST, OPTIONS`; `Access-Control-Allow-Headers` gains `Authorization` (browser + OIDC works) and the protocol-`2026-07-28` request headers `Mcp-Method` and `Mcp-Name`; `Access-Control-Expose-Headers` is gone.
+- **Request bodies** over `/mcp` are capped at 4 MiB (SDK default; `413` beyond).
+- **Tool description** rewritten around statelessness; the required-field set is unchanged.
+- **Dependencies:** `github.com/modelcontextprotocol/go-sdk` v1.7.0 (the sessionless model); `google.golang.org/grpc` (indirect, via the OTLP exporters) to v1.83.2 for GO-2026-6061.
+
 ## `cli` always emits JSON; `--json` flag removed
 
 **Breaking (cli invocation).** `critical-thinking cli` now always prints structured
@@ -41,7 +69,7 @@ Non-breaking, additive.
 
 ## Claude Code plugin re-introduced
 
-Non-breaking. A Claude Code **plugin** now ships in-repo under `plugins/critical-thinking/`, bundling the MCP server (auto-installed via a `SessionStart` hook), a two-gate critical-thinking verification skill, and a `UserPromptSubmit` hook that activates the skill on every prompt. This is additive packaging — the server, its `criticalthinking` tool, schema, and transports are unchanged. It reverses the earlier removal of the plugin scaffolding described below, so the note that "the project is now solely an MCP server" no longer holds. See [`plugins/critical-thinking/README.md`](../plugins/critical-thinking/README.md).
+Non-breaking. A Claude Code **plugin** now ships in-repo under `plugins/critical-thinking/`, bundling the MCP server (auto-installed via a `SessionStart` hook), a two-gate critical-thinking verification skill, and a `UserPromptSubmit` hook that injects the two-gate protocol into every prompt. This is additive packaging — the server, its `criticalthinking` tool, schema, and transports are unchanged. It reverses the earlier removal of the plugin scaffolding described below, so the note that "the project is now solely an MCP server" no longer holds. See [`plugins/critical-thinking/README.md`](../plugins/critical-thinking/README.md).
 
 ## v1.8.0 — Config via Viper; `CTHINK_` env prefix
 

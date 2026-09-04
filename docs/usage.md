@@ -83,13 +83,12 @@ line) and read the result back.
   success, `1` if the input fails to parse or validate. Empty input or
   trailing data after the document is an error: `--once` means one thought.
 
-History, confidence, and branches accumulate across input lines that share an
-`episodeId` (absent → the `"default"` episode) within one run
-(the analog of a single stdio MCP session). Every line is processed; the command
-exits non-zero if any line fails. A malformed-JSON line is reported on stderr. A
-line the engine rejects (for example a validation error) is emitted to stdout
-as a JSON error object (`{"error":…,"status":"failed"}`) so the output stream
-stays complete and parseable line-for-line.
+Every line is processed independently — the engine keeps nothing between lines,
+so a script can replay, reorder, or parallelise inputs freely. The command exits
+non-zero if any line fails. A malformed-JSON line is reported on stderr. A line
+the engine rejects (for example a validation error) is emitted to stdout as a
+JSON error object (`{"error":…,"status":"failed","hint":…}`) so the output
+stream stays complete and parseable line-for-line.
 
 Each `ThoughtData` line must carry the required fields — `thought`,
 `thoughtNumber`, `totalThoughts`, `nextThoughtNeeded`, `confidence` (0.0–1.0),
@@ -97,10 +96,6 @@ Each `ThoughtData` line must carry the required fields — `thought`,
 `nextStepRationale` when `nextThoughtNeeded` is `true`. See
 [clients.md#cli-no-mcp-host](clients.md#cli-no-mcp-host) for the full
 field-by-field contract.
-
-- `episodeId` (string, optional): partitions state into independent reasoning
-  episodes. Absent → the shared `"default"` episode. Reuse one value per problem;
-  switch for a new problem. Echoed back in the response.
 
 ## A worked session
 
@@ -118,9 +113,9 @@ EOF
 Output — one `ThoughtResponse` per line:
 
 ```
-{"thoughtNumber":1,"totalThoughts":3,"nextThoughtNeeded":true,"branches":[],"thoughtHistoryLength":1,"sessionConfidence":0.6}
-{"thoughtNumber":2,"totalThoughts":3,"nextThoughtNeeded":true,"branches":[],"thoughtHistoryLength":2,"sessionConfidence":0.6499999999999999}
-{"thoughtNumber":1,"totalThoughts":2,"nextThoughtNeeded":false,"branches":["denormalized"],"thoughtHistoryLength":3,"sessionConfidence":0.6499999999999999,"branchConfidences":{"denormalized":0.5}}
+{"thoughtNumber":1,"totalThoughts":3,"nextThoughtNeeded":true,"confidence":0.6}
+{"thoughtNumber":2,"totalThoughts":3,"nextThoughtNeeded":true,"confidence":0.7}
+{"thoughtNumber":1,"totalThoughts":2,"nextThoughtNeeded":false,"confidence":0.5}
 ```
 
 ## schema and version
