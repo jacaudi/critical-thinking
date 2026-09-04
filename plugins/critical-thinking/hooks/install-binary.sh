@@ -4,9 +4,9 @@
 # .mcp.json can launch it without a Go toolchain.
 #
 # Update model: EXPECTED_VERSION is the source of truth for which binary the
-# plugin expects. semantic-release auto-bumps it on every release (see
-# scripts/bump-plugin-version.mjs + .releaserc.json). On `claude plugin update`
-# the new script arrives, the version mismatch fires, and the binary refreshes
+# plugin expects. release-please bumps it in every release PR (the
+# x-release-please-version annotation below; see .github/release-please-config.json).
+# On `claude plugin update` the new script arrives, the version mismatch fires, and the binary refreshes
 # on next session start. No runtime API calls, no TTL guessing.
 #
 # Behavior:
@@ -27,9 +27,9 @@ set -euo pipefail
 REPO="jacaudi/critical-thinking"
 PROJECT="critical-thinking"
 
-# DO NOT EDIT BY HAND. Auto-bumped on every release by semantic-release
-# (scripts/bump-plugin-version.mjs via .releaserc.json @semantic-release/exec).
-EXPECTED_VERSION="v1.16.0"
+# DO NOT EDIT BY HAND. Bumped in every release PR by release-please (generic
+# updater, .github/release-please-config.json extra-files).
+EXPECTED_VERSION="v1.16.0" # x-release-please-version
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")"/.. && pwd)}"
 BIN_DIR="${PLUGIN_ROOT}/bin"

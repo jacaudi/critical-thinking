@@ -27,8 +27,10 @@ archives:
 checksum:
   name_template: "checksums.txt"
 release:
-  # semantic-release owns the GitHub Release; goreleaser only produces artifacts.
-  disable: true
+  # release-please creates the tag, the GitHub Release and its notes; goreleaser
+  # (ci-binaries.yml, run on the tag) only attaches the archives and checksums.
+  # keep-existing: never overwrite the notes release-please wrote.
+  mode: keep-existing
 changelog:
-  # semantic-release owns the changelog.
+  # release-please owns CHANGELOG.md and the release notes.
   disable: true

@@ -1,32 +1,28 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "includeForks": true,
-  "dependencyDashboard": true,
+  "extends": [
+    "github>jacaudi/renovate-config:base",
+    "github>jacaudi/renovate-config:go",
+    "github>home-operations/renovate-config:annotated.json5"
+  ],
   "dependencyDashboardTitle": "Renovate Dashboard 🤖",
-  "suppressNotifications": ["prIgnoreNotification"],
-  "timezone": "America/Los_Angeles",
-  "semanticCommits": "enabled",
+  "docker": {
+    "pinDigests": true
+  },
+  "github-actions": {
+    "pinDigests": true
+  },
   "packageRules": [
     {
+      "description": "Bump go.mod requirements to the resolved version instead of leaving a floor",
       "matchManagers": ["gomod"],
       "rangeStrategy": "bump"
     },
     {
-      "matchPackageNames": ["go"],
+      "description": "The `go` docker image is versioned like Node (major.minor tags), not semver",
       "matchDatasources": ["docker"],
+      "matchPackageNames": ["go"],
       "versioning": "node"
     }
-  ],
-  "docker": {
-    "enabled": true,
-    "pinDigests": true
-  },
-  "github-actions": {
-    "enabled": true,
-    "pinDigests": true
-  },
-  "gomod": {
-    "enabled": true
-  }
+  ]
 }

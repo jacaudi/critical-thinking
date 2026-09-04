@@ -1,0 +1,57 @@
+# Stage f (local addition) — goreleaser cross-compiles the binary from the release TAG and attaches archives + checksums to the release release-please created.
+name: ci-binaries
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and publish binaries for (e.g. v1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  binaries:
+    name: goreleaser ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write   # upload assets to the existing GitHub Release
+    steps:
+      - name: Checkout the tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0   # goreleaser derives the version from tags
+          persist-credentials: false
+
+      # Same guard as ci-build: refuse to stamp binaries from a checkout whose
+      # manifest disagrees with the tag being published.
+      - name: Verify the checkout matches the release being stamped
+        env:
+          WANT: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          have="v$(jq -r '.["."]' .github/.release-please-manifest.json)"
+          echo "tag being stamped: ${WANT}"
+          echo "manifest reports:  ${have}"
+          [ "${WANT}" = "${have}" ] || { echo "::error::refusing to publish ${WANT} from a checkout that reports ${have}"; exit 1; }
+
+      - name: Set up toolchains
+        uses: ./.github/actions/setup
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          lint-tools: false
+
+      # `release.mode: keep-existing` in .goreleaser.yaml: release-please owns
+      # the release and its notes; goreleaser only uploads the artifacts.
+      - name: Build and upload binaries
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
