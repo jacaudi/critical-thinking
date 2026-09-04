@@ -29,7 +29,7 @@ PROJECT="critical-thinking"
 
 # DO NOT EDIT BY HAND. Bumped in every release PR by release-please (generic
 # updater, .github/release-please-config.json extra-files).
-EXPECTED_VERSION="v1.16.0" # x-release-please-version
+EXPECTED_VERSION="v1.17.0" # x-release-please-version
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")"/.. && pwd)}"
 BIN_DIR="${PLUGIN_ROOT}/bin"

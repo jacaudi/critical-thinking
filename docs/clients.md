@@ -125,7 +125,7 @@ For browser-based clients, set `CTHINK_ALLOWED_ORIGINS` to permit your origin â€
 
 <!-- x-release-please-start-version -->
 ```bash
-docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.16.0
+docker run -d --name critical-thinking -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.17.0
 ```
 <!-- x-release-please-end -->
 
