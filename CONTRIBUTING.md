@@ -4,7 +4,7 @@ Thanks for your interest in improving critical-thinking! This is a short pointer
 
 ## Getting started
 
-The full developer guide lives in **[docs/development.md](docs/development.md)** — toolchain (Go 1.26+), build, test, project layout, and how to exercise the tool with the MCP Inspector. Start there.
+The full developer guide lives in **[docs/development.md](docs/development.md)** — toolchain (see `go` directive in [`go.mod`](go.mod)), build, test, project layout, and how to exercise the tool with the MCP Inspector. Start there.
 
 Common tasks are wired into [`taskfile.yml`](taskfile.yml) (install [Task](https://taskfile.dev), then run `task --list`):
 
