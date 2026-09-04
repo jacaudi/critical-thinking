@@ -6,6 +6,7 @@ own script feeds it NDJSON). Install once, then pick the path that fits.
 
 ## Install
 
+<!-- x-release-please-start-version -->
 ```bash
 # Go toolchain (lands at $GOPATH/bin/critical-thinking)
 go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest
@@ -13,6 +14,7 @@ go install github.com/jacaudi/critical-thinking/cmd/critical-thinking@latest
 # Container image (pin to a release tag)
 docker pull ghcr.io/jacaudi/critical-thinking:v1.16.0
 ```
+<!-- x-release-please-end -->
 
 Prebuilt binaries for each release are attached to the
 [GitHub releases](https://github.com/jacaudi/critical-thinking/releases).
@@ -22,11 +24,13 @@ Prebuilt binaries for each release are attached to the
 The default transport is stdio (what Claude Desktop, Codex CLI, VS Code, etc.
 expect); `--http` switches to Streamable HTTP.
 
+<!-- x-release-please-start-version -->
 ```bash
 critical-thinking serve                 # stdio (default)
 critical-thinking serve --http :3000    # Streamable HTTP on :3000
 docker run --rm -p 3000:3000 ghcr.io/jacaudi/critical-thinking:v1.16.0   # HTTP in a container
 ```
+<!-- x-release-please-end -->
 
 Register it with Claude Code using the `claude` CLI:
 

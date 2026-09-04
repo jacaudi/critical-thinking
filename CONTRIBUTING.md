@@ -9,9 +9,9 @@ The full developer guide lives in **[docs/development.md](docs/development.md)**
 Common tasks are wired into [`taskfile.yml`](taskfile.yml) (install [Task](https://taskfile.dev), then run `task --list`):
 
 ```bash
-task ci           # everything CI runs, in CI's order
-task test-race    # race detector + coverage (the standard mode for this project)
-task lint         # golangci-lint run ./...
+task ci           # everything CI runs: repo checks, Go checks, plugin checks
+task test         # the Go suite with the race detector + the plugin shell tests
+task lint         # static checks only (actionlint, yamllint, hadolint, golangci-lint, shellcheck)
 task build        # build the binary into bin/
 ```
 
@@ -19,16 +19,14 @@ task build        # build the binary into bin/
 
 ## Commit messages
 
-Releases are automated with [semantic-release](https://github.com/semantic-release/semantic-release), so commits must follow [Conventional Commits](https://www.conventionalcommits.org/):
+Releases are automated with [release-please](https://github.com/googleapis/release-please), so commits must follow [Conventional Commits](https://www.conventionalcommits.org/). release-please keeps a `chore: release X.Y.0` pull request open on `main` carrying the CHANGELOG and the version bumps; merging that PR cuts the tag, the GitHub release (goreleaser attaches the binaries) and the container image. Nobody tags by hand.
 
 | Type | Effect |
 |------|--------|
-| `fix: ...` | Patch release |
-| `feat: ...` | Minor release |
-| `feat!: ...` / `BREAKING CHANGE:` | Minor release (project policy in `.releaserc.json`; the major stays at 1) |
-| `refactor: ...` | Minor release (project policy) |
-| `chore(deps): ...` | Patch release |
-| `chore:`, `docs:`, `test:`, `ci:` | No release |
+| Any conventional commit (`feat:`, `fix:`, `chore(deps):`, `docs:`, `ci:`, ...) | Queued into the release PR under its changelog section (`style:` is hidden) |
+| `feat!: ...` / `BREAKING CHANGE:` | Queued into the release PR; the major stays at 1 (project policy) |
+
+Every release bumps the **minor** version (`versioning: always-bump-minor` in `.github/release-please-config.json`): the project policy is that the major stays at 1, and release-please has no strategy that maps a breaking change to a minor bump while keeping patch bumps for fixes, so a fix-only or deps-only release is a minor bump too. Merge the release PR when you want a release; leave it open to batch more commits into it.
 
 ## The tool description is a protocol
 

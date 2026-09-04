@@ -2,7 +2,7 @@
 
 ## Toolchain
 
-Go 1.26+ builds the binary on its own (the MCP SDK is a Go module). The verification targets also need [Task](https://taskfile.dev), `jq`, and `shellcheck`; the dev container below has all of them.
+Go 1.26+ builds the binary on its own (the MCP SDK is a Go module). The verification targets also need [Task](https://taskfile.dev) and the lint tools listed under the dev container below, which has all of them.
 
 ## Build
 
@@ -17,15 +17,16 @@ task build   # bin/critical-thinking, stamped with the git version
 All verification targets live in [`taskfile.yml`](../taskfile.yml); CI runs the same targets, so `task ci` locally is CI.
 
 ```bash
-task ci          # gofmt, vet, golangci-lint, govulncheck, plugin lint+tests, go test -race, build
-task test-race   # just the Go suite, race detector on, no test cache
+task ci          # repo checks (actionlint, yamllint, hadolint), Go checks (fmt, tidy, golangci-lint, govulncheck, go test -race), plugin lint+tests
+task test        # just the tests (Go suite with the race detector, plugin shell tests)
+task --list      # every target, including the per-module ones (go:lint, plugin:test, ...)
 ```
 
 `-race` is the standard mode for this project: one `*mcp.Server` serves every HTTP request concurrently, and the OpenTelemetry middleware binds instruments once per process, so plain `go test` would miss data races on those paths.
 
 ### Dev container
 
-`.devcontainer/` defines a container with the Go toolchain, Task, `jq`, and `shellcheck` — everything the targets need. With the [Dev Containers CLI](https://github.com/devcontainers/cli):
+`.devcontainer/` defines a container with the Go toolchain, Task, and every lint tool the targets need (golangci-lint, govulncheck, actionlint, hadolint, yamllint, shellcheck, jq) at the same pinned versions CI installs. With the [Dev Containers CLI](https://github.com/devcontainers/cli):
 
 ```bash
 devcontainer up --workspace-folder .
@@ -75,10 +76,9 @@ The inspector lets you call `criticalthinking` interactively and watch the rende
 │   └── *_test.go                 # unit tests, incl. the no-state/no-SDK boundary guard
 ├── plugins/critical-thinking/    # Claude Code plugin: skill, hooks, install script, shell tests
 ├── docs/                         # this documentation; docs/plans/ is local-only
-├── scripts/                      # semantic-release helpers (version bumps)
-├── .github/                      # CI (calls the taskfile targets) and release workflows
-├── .devcontainer/                # Go + Task + jq + shellcheck; `task ci` runs here
-├── taskfile.yml                  # every build/lint/test target; `ci` = what CI runs
+├── .github/                      # ci.yaml + local reusable stages (ci-*.yml), release-please config, renovate
+├── .devcontainer/                # Go + Task + the lint tools; `task ci` runs here
+├── taskfile.yml                  # THE CI CONTRACT: `ci` = what CI runs (modules in .taskfiles/)
 └── Dockerfile                    # multi-stage, distroless final
 ```
 
@@ -89,7 +89,9 @@ under any concurrency. All OpenTelemetry instrumentation lives in
 
 ## Release workflow
 
-CI runs on push and PR via GitHub Actions — the same `task ci` targets listed above (gofmt, vet, golangci-lint, govulncheck, plugin lint+tests, `go test -race`, build). Releases are cut by semantic-release on every push to `main`: it reads the conventional commits, creates the `vX.Y.Z` tag and GitHub release (goreleaser attaches the binaries), and the release workflow then builds and pushes the multi-arch Docker image to `ghcr.io/jacaudi/critical-thinking:vX.Y.Z` and updates `:latest`. Nobody tags by hand; see [CONTRIBUTING.md](../CONTRIBUTING.md) for the commit-type → release mapping.
+[`.github/workflows/ci.yaml`](../.github/workflows/ci.yaml) runs on every push. Its `test` stage is exactly `task ci`; when a PR is open for the branch it also builds the multi-arch image (`build`) and boots it (`smoke`, which runs `task smoke`), and the single required status check is the `ci` job. Each stage is a local reusable workflow (`ci-*.yml`) sharing the `.github/actions/setup` composite for toolchains.
+
+Releases are cut by [release-please](https://github.com/googleapis/release-please) (`release` stage, `main` only). It keeps a `chore: release X.Y.0` PR open with the CHANGELOG, the image tags in `docs/usage.md` and `docs/clients.md`, and the plugin hook's `EXPECTED_VERSION` (all via `x-release-please-version` annotations, configured in `.github/release-please-config.json`). Merging that PR creates the `vX.Y.Z` tag and GitHub release; the same run then attaches the goreleaser binaries and checksums (`release-binaries`), builds the release image from the tag (`release-image`, pushing `ghcr.io/jacaudi/critical-thinking:vX.Y.Z`, `:vX.Y`, `:vX` and `:latest`) and smoke-tests it (`release-smoke`). Nobody tags by hand; see [CONTRIBUTING.md](../CONTRIBUTING.md) for the commit-type → release mapping. `release-republish.yml` (manual) repairs a release image that shipped wrong.
 
 ## Treating the description as a protocol
 

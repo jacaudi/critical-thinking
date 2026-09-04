@@ -1,0 +1,38 @@
+# Stage a — lint, format, static analysis, tests, vuln scan. Body is always `task ci`. Rationale: github-actions-align/templates/README.md#ci-testyml
+name: ci-test
+
+on:
+  workflow_call:
+    inputs:
+      task:
+        description: Task target to run. Override for stricter scheduled runs.
+        required: false
+        default: ci
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ inputs.task }}
+    runs-on: ubuntu-latest
+    # Observed ~3 min: module download, golangci-lint, govulncheck, the race
+    # suite, and the plugin's install test (which downloads a real release
+    # archive). 15 leaves headroom while capping a hang.
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up toolchains
+        uses: ./.github/actions/setup
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # `task repo:actions` lints the workflows on every run (no BASE_REF diff),
+      # so no fetch-depth is needed here.
+      - name: Run task ${{ inputs.task }}
+        run: task ${{ inputs.task }}
