@@ -56,7 +56,28 @@ type ThoughtResponse struct {
 const requiredFieldsChecklist = "Every call requires: thought, thoughtNumber, totalThoughts, nextThoughtNeeded, confidence, assumptions, critique, counterArgument — plus nextStepRationale whenever nextThoughtNeeded=true."
 
 // Validate enforces every input rule; "present" means non-blank for strings.
+// It delegates to one helper per validation concern, in the fixed order
+// callers and tests depend on: the first violation found is the error
+// returned.
 func (td ThoughtData) Validate() error {
+	if err := td.validateRequiredFields(); err != nil {
+		return err
+	}
+	if err := td.validateAssumptions(); err != nil {
+		return err
+	}
+	if err := td.validateNarrative(); err != nil {
+		return err
+	}
+	if err := td.validateRevisionPair(); err != nil {
+		return err
+	}
+	return td.validateBranchPair()
+}
+
+// validateRequiredFields checks the fields every call must send: the thought
+// text, the two counters, the routing flag, and confidence's range.
+func (td ThoughtData) validateRequiredFields() error {
 	if strings.TrimSpace(td.Thought) == "" {
 		return errors.New("thought must be a non-blank string")
 	}
@@ -72,6 +93,12 @@ func (td ThoughtData) Validate() error {
 	if math.IsNaN(td.Confidence) || td.Confidence < 0.0 || td.Confidence > 1.0 {
 		return fmt.Errorf("confidence must be between 0.0 and 1.0 (got %v)", td.Confidence)
 	}
+	return nil
+}
+
+// validateAssumptions checks that the slice is present (possibly empty) and
+// that every entry, if any, is non-blank.
+func (td ThoughtData) validateAssumptions() error {
 	if td.Assumptions == nil {
 		return errors.New("assumptions must be present (use [] if none)")
 	}
@@ -80,6 +107,14 @@ func (td ThoughtData) Validate() error {
 			return fmt.Errorf("assumptions[%d] must be a non-blank string (use [] if you claim none)", i)
 		}
 	}
+	return nil
+}
+
+// validateNarrative checks the free-text fields that must be non-blank:
+// critique and counterArgument always, nextStepRationale only when more
+// thinking is needed. NextThoughtNeeded is guaranteed non-nil here because
+// validateRequiredFields always runs first.
+func (td ThoughtData) validateNarrative() error {
 	if strings.TrimSpace(td.Critique) == "" {
 		return errors.New("critique must be a non-blank string")
 	}
@@ -89,14 +124,24 @@ func (td ThoughtData) Validate() error {
 	if *td.NextThoughtNeeded && strings.TrimSpace(td.NextStepRationale) == "" {
 		return errors.New("nextStepRationale required when nextThoughtNeeded is true; send one, or set nextThoughtNeeded=false if this line of thinking is done")
 	}
+	return nil
+}
 
-	// Revision and branch fields each come as a pair or not at all.
+// validateRevisionPair checks that isRevision and revisesThought are sent
+// together or not at all, and that revisesThought is in range.
+func (td ThoughtData) validateRevisionPair() error {
 	if td.IsRevision != (td.RevisesThought != 0) {
 		return errors.New("set isRevision=true together with revisesThought ≥ 1, or omit both")
 	}
 	if td.RevisesThought < 0 {
 		return fmt.Errorf("revisesThought must be ≥ 1 (got %d)", td.RevisesThought)
 	}
+	return nil
+}
+
+// validateBranchPair checks that branchFromThought and branchId are sent
+// together or not at all, and that branchFromThought is in range.
+func (td ThoughtData) validateBranchPair() error {
 	if (td.BranchFromThought != 0) != (td.BranchID != "") {
 		return errors.New("send branchFromThought ≥ 1 together with branchId, or omit both")
 	}

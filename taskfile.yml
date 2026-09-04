@@ -1,3 +1,4 @@
+# THE CI CONTRACT — generated per repo; `task ci` is what CI runs and what you run locally. Rationale: github-actions-align/templates/README.md#taskfiles
 version: '3'
 
 vars:
@@ -12,71 +13,90 @@ vars:
   DATE:
     sh: date -u +%Y-%m-%dT%H:%M:%SZ
   LDFLAGS: -s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}
-  # Pinned tool versions. `go run` builds each with the current Go toolchain
-  # (a prebuilt golangci-lint built with an older Go refuses a newer go.mod).
-  GOLANGCI_LINT: github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
-  GOVULNCHECK: golang.org/x/vuln/cmd/govulncheck@v1.7.0
+
+includes:
+  repo:
+    taskfile: .taskfiles/repo.yml
+
+  # --- generated: one entry per language present; `dir:` for non-Go ---
+  go:
+    taskfile: .taskfiles/go.yml
+
+  # LOCAL ADDITION to the github-actions-align template: the Claude Code plugin
+  # under plugins/ is shell + JSON, which no language module covers. Its checks
+  # live in their own module so they are part of the contract (`task ci`)
+  # rather than a workflow-only step.
+  plugin:
+    taskfile: .taskfiles/plugin.yml
 
 tasks:
+  default:
+    desc: List all tasks
+    cmds:
+      - task --list
+
+  ci:
+    desc: Everything CI runs. Run this before pushing.
+    cmds:
+      - task: repo:ci
+      - task: go:ci
+      - task: plugin:ci
+
+  lint:
+    desc: Static checks only
+    cmds:
+      - task: repo:ci
+      - task: go:lint
+      - task: plugin:lint
+
+  test:
+    desc: Tests only
+    cmds:
+      - task: go:test
+      - task: plugin:test
+
+  # LOCAL DIVERGENCE from the template's `go:build`: the binary is stamped with
+  # the git version, commit and date (surfaced by `/health` and the MCP
+  # Implementation.Version), the same -X flags the Dockerfile passes.
   build:
-    desc: Build the binary into bin/
+    desc: Build the binary into bin/, stamped with the git version
     cmds:
       - CGO_ENABLED=0 go build -trimpath -ldflags "{{.LDFLAGS}}" -o bin/{{.BINARY}} {{.PKG}}
-  test:
-    desc: go test ./...
-    cmds:
-      - go test ./...
-  test-race:
-    desc: Race detector + coverage, no test cache (the standard mode here)
-    cmds:
-      - go test -race -count=1 -coverprofile=coverage.txt ./...
-  gofmt:
-    desc: Fail if any Go file is not gofmt-clean
+
+  # Service repo. Runs locally: IMAGE=ghcr.io/jacaudi/critical-thinking:vX.Y.Z task smoke
+  smoke:
+    desc: Boot the built image and assert it behaves
+    requires:
+      vars: [IMAGE]
+    # Accepts BOTH `IMAGE=… task smoke` and `task smoke IMAGE=…`. Without this,
+    # the CLI form satisfies `requires` but leaves $IMAGE empty in the shell.
+    env:
+      IMAGE: '{{.IMAGE}}'
     cmds:
       - |
-        unformatted=$(gofmt -l .)
-        if [ -n "$unformatted" ]; then
-          echo "gofmt found unformatted files:"
-          echo "$unformatted"
-          gofmt -d .
-          exit 1
-        fi
-  vet:
-    desc: go vet ./...
-    cmds:
-      - go vet ./...
-  lint:
-    desc: golangci-lint (pinned) over the module
-    cmds:
-      - go run {{.GOLANGCI_LINT}} run ./...
-  vulncheck:
-    desc: govulncheck (pinned) over the module
-    cmds:
-      - go run {{.GOVULNCHECK}} ./...
-  lint:plugin:
-    desc: shellcheck the plugin scripts and validate its JSON
-    cmds:
-      - shellcheck plugins/critical-thinking/hooks/*.sh plugins/critical-thinking/test/*.sh
-      - 'for f in plugins/critical-thinking/.mcp.json plugins/critical-thinking/hooks/hooks.json plugins/critical-thinking/.claude-plugin/plugin.json; do jq -e . "$f" >/dev/null; done'
-  test:plugin:
-    desc: Run the plugin shell tests
-    cmds:
-      - bash plugins/critical-thinking/test/hooks_json_test.sh
-      - bash plugins/critical-thinking/test/install-binary_test.sh
-      - bash plugins/critical-thinking/test/activate_test.sh
-      - bash plugins/critical-thinking/test/skill_test.sh
-  ci:
-    desc: Everything CI runs, in CI's order (keep in sync with .github/actions/tests/action.yml)
-    cmds:
-      - task: gofmt
-      - task: vet
-      - task: lint
-      - task: vulncheck
-      - task: lint:plugin
-      - task: test:plugin
-      - task: test-race
-      - task: build
+        set -eu
+        echo "smoke testing ${IMAGE}"
+        # Boot exactly as docs/clients.md tells users to: the image's own CMD
+        # (`serve --http :3000`) with the port published, nothing else.
+        docker run -d --name smoke -p 3000:3000 "${IMAGE}"
+        trap 'docker logs smoke || true; docker rm -f smoke >/dev/null 2>&1 || true' EXIT
+        for i in $(seq 1 30); do
+          curl -sf http://localhost:3000/health >/dev/null && break
+          [ "$i" = "30" ] && { echo "::error::container never served /health on :3000"; exit 1; }
+          sleep 2
+        done
+        echo "ok: container serves /health"
+        # The health body carries the stamped version; an image built without
+        # the VERSION build-arg reports "dev", which is the one regression
+        # `docker run` alone cannot catch.
+        body=$(curl -sf http://localhost:3000/health)
+        echo "${body}"
+        case "${body}" in
+          *'"status":"ok"'*) echo "ok: status is ok" ;;
+          *) echo "::error::/health did not report status ok"; exit 1 ;;
+        esac
+
   clean:
-    desc: Remove build and coverage artifacts
+    desc: Remove build artifacts
     cmds:
-      - rm -rf bin/ coverage.txt
+      - rm -rf bin/
