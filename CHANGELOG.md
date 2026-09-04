@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.17.0](https://github.com/jacaudi/critical-thinking/compare/v1.16.0...v1.17.0) (2026-09-04)
+
+
+### Continuous Integration
+
+* adopt the taskfile CI contract (github-actions-align step 2) ([#97](https://github.com/jacaudi/critical-thinking/issues/97)) ([4f91fa6](https://github.com/jacaudi/critical-thinking/commit/4f91fa679a0b15db2d0a8a4d55c5a4ab0082db84))
+* **renovate:** drop the in-repo Renovate workflow ([#105](https://github.com/jacaudi/critical-thinking/issues/105)) ([85a96db](https://github.com/jacaudi/critical-thinking/commit/85a96dbe56f7199b895eae17dabdf55338576989))
+* standard pipeline — local reusable stages, release-please, the `ci` check ([#98](https://github.com/jacaudi/critical-thinking/issues/98)) ([f926689](https://github.com/jacaudi/critical-thinking/commit/f926689450d271b31067590048a694257e5382ce))
+
+
+### Chores
+
+* **deps:** rollup — Go 1.27, golang/distroless/dockerfile images, otelhttp v0.71.0, checkout + renovate actions ([#102](https://github.com/jacaudi/critical-thinking/issues/102)) ([120d39b](https://github.com/jacaudi/critical-thinking/commit/120d39b4af00c5a5578be6ccd1850e3917ce47d8))
+* **deps:** Update docker/setup-qemu-action action to v4.3.0 ([99f06c3](https://github.com/jacaudi/critical-thinking/commit/99f06c3e65240b111a814db2213579e1a996335f))
+* **deps:** Update module github.com/coreos/go-oidc/v3 to v3.21.0 ([434702f](https://github.com/jacaudi/critical-thinking/commit/434702f024a8ecac6bf33541b7bae5fb6c8a64f0))
+* **deps:** Update opentelemetry-go monorepo to v1.46.0 ([926f26d](https://github.com/jacaudi/critical-thinking/commit/926f26d3e6acc8dd725f76bc5d2a403e1d1a53eb))
+
 ## [1.16.0](https://github.com/jacaudi/critical-thinking/compare/v1.15.1...v1.16.0) (2026-09-04)
 ### ⚠ BREAKING CHANGES
 
