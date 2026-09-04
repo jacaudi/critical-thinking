@@ -363,9 +363,18 @@ func TestErrorResultOmitsStructuredContent(t *testing.T) {
 	}
 }
 
+// httpResult is the subset of *http.Response callers of rawPost and
+// browserPost need. Returning it instead of *http.Response means the body
+// has one owner — the helper that reads and closes it — rather than leaving
+// every call site to close a body it never touches.
+type httpResult struct {
+	StatusCode int
+	Header     http.Header
+}
+
 // rawPost sends one JSON-RPC body to /mcp; sessionID, when non-empty, is sent
 // as a (stale) mcp-session-id header.
-func rawPost(t *testing.T, base, payload, sessionID string) (*http.Response, string) {
+func rawPost(t *testing.T, base, payload, sessionID string) (httpResult, string) {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, base+"/mcp", bytes.NewBufferString(payload))
 	if err != nil {
@@ -382,7 +391,7 @@ func rawPost(t *testing.T, base, payload, sessionID string) (*http.Response, str
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
-	return resp, string(body)
+	return httpResult{StatusCode: resp.StatusCode, Header: resp.Header}, string(body)
 }
 
 // extractFirstJSON returns the first JSON-RPC envelope from a server response,
@@ -401,7 +410,7 @@ func extractFirstJSON(body string) string {
 }
 
 func TestHTTPAuthEnabledGatesMCP(t *testing.T) {
-	idp := newFakeIdP(t)
+	idp := newFakeIDP(t)
 	verifier, err := newOIDCVerifier(t.Context(), idp.issuer(), "critical-thinking")
 	if err != nil {
 		t.Fatalf("newOIDCVerifier: %v", err)
@@ -442,7 +451,7 @@ func TestHTTPAuthDisabledLeavesMCPOpen(t *testing.T) {
 
 func TestHTTPAuthOptionsBypass(t *testing.T) {
 	// OPTIONS preflight must short-circuit in withCORS before auth, returning 200 without a token.
-	idp := newFakeIdP(t)
+	idp := newFakeIDP(t)
 	verifier, err := newOIDCVerifier(t.Context(), idp.issuer(), "critical-thinking")
 	if err != nil {
 		t.Fatalf("newOIDCVerifier: %v", err)
@@ -462,7 +471,7 @@ func TestHTTPAuthOptionsBypass(t *testing.T) {
 
 // browserPost sends a cross-site browser POST (Origin + Sec-Fetch-Site) so
 // both the CORS layer and the CSRF layer get to vote.
-func browserPost(t *testing.T, base, origin, payload string) *http.Response {
+func browserPost(t *testing.T, base, origin, payload string) httpResult {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, base+"/mcp", bytes.NewBufferString(payload))
 	if err != nil {
@@ -476,8 +485,8 @@ func browserPost(t *testing.T, base, origin, payload string) *http.Response {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = resp.Body.Close()
-	return resp
+	defer func() { _ = resp.Body.Close() }()
+	return httpResult{StatusCode: resp.StatusCode, Header: resp.Header}
 }
 
 // TestBuildHTTPHandlerRejectsInvalidOrigin covers buildHTTPHandler's error

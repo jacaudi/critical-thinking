@@ -54,21 +54,21 @@ func TestWriteUnauthorized(t *testing.T) {
 	}
 }
 
-// fakeIdP is an httptest-backed OIDC provider: it serves a discovery doc and a JWKS derived
+// fakeIDP is an httptest-backed OIDC provider: it serves a discovery doc and a JWKS derived
 // from a locally generated RSA key, and can mint signed JWTs for tests.
-type fakeIdP struct {
+type fakeIDP struct {
 	server *httptest.Server
 	key    *rsa.PrivateKey
 	kid    string
 }
 
-func newFakeIdP(t *testing.T) *fakeIdP {
+func newFakeIDP(t *testing.T) *fakeIDP {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
 	}
-	idp := &fakeIdP{key: key, kid: "test-key-1"}
+	idp := &fakeIDP{key: key, kid: "test-key-1"}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -95,10 +95,10 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	return idp
 }
 
-func (idp *fakeIdP) issuer() string { return idp.server.URL }
+func (idp *fakeIDP) issuer() string { return idp.server.URL }
 
 // mint signs an RS256 JWT with the given claims using idp's key (or override, if non-nil).
-func (idp *fakeIdP) mint(t *testing.T, claims map[string]any, override *rsa.PrivateKey) string {
+func (idp *fakeIDP) mint(t *testing.T, claims map[string]any, override *rsa.PrivateKey) string {
 	t.Helper()
 	signKey := idp.key
 	if override != nil {
@@ -118,7 +118,7 @@ func (idp *fakeIdP) mint(t *testing.T, claims map[string]any, override *rsa.Priv
 	return signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
 
-func validClaims(idp *fakeIdP, aud string) map[string]any {
+func validClaims(idp *fakeIDP, aud string) map[string]any {
 	now := time.Now()
 	return map[string]any{
 		"iss": idp.issuer(),
@@ -134,7 +134,7 @@ func stubOK(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusO
 
 func TestRequireAuth(t *testing.T) {
 	const audience = "critical-thinking"
-	idp := newFakeIdP(t)
+	idp := newFakeIDP(t)
 	verifier, err := newOIDCVerifier(context.Background(), idp.issuer(), audience)
 	if err != nil {
 		t.Fatalf("newOIDCVerifier: %v", err)

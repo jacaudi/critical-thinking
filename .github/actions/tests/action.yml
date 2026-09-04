@@ -1,51 +1,18 @@
 name: "Tests"
-description: "Run Go tests for the MCP server"
+description: "Run `task ci` — the taskfile is the CI contract"
 
+# Interim shape: the toolchains and lint tools come from the shared setup
+# action so this composite runs exactly `task ci`, the same command the dev
+# container runs. The workflow swap that retires this action follows in the
+# next PR (github-actions-align, step 4).
 runs:
   using: "composite"
   steps:
-    - name: Setup Go
-      uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
+    - name: Set up toolchains
+      uses: ./.github/actions/setup
       with:
-        go-version: '1.26'
-        cache: true
-
-    - name: Setup Task
-      uses: arduino/setup-task@v2
-      with:
-        version: 3.x
         repo-token: ${{ github.token }}
 
-    # Every step below is a taskfile target so CI and the dev container
-    # (.devcontainer/) run one command set. Keep this step list identical, in
-    # order, to the `ci` task in taskfile.yml; the split into steps exists only
-    # for per-step log grouping.
-    - name: gofmt
+    - name: task ci
       shell: bash
-      run: task gofmt
-
-    - name: vet
-      shell: bash
-      run: task vet
-
-    - name: golangci-lint
-      shell: bash
-      run: task lint
-
-    - name: govulncheck
-      shell: bash
-      run: task vulncheck
-
-    - name: plugin lint + tests
-      shell: bash
-      run: |
-        task lint:plugin
-        task test:plugin
-
-    - name: test (race + coverage)
-      shell: bash
-      run: task test-race
-
-    - name: build
-      shell: bash
-      run: task build
+      run: task ci
