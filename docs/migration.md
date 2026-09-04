@@ -15,7 +15,7 @@ Cumulative breaking-change log for `critical-thinking`. Most recent changes firs
 | Metrics `ct.sessions.created`, `ct.episodes.evicted`; span attributes `ct.history_length`, `ct.episode_id` | `ct.mcp.calls`, `ct.mcp.duration`, and the five bounded `ct.*` domain attributes remain. |
 | `/health` field `sessionsCreated` | `/health` returns `{status, transport, version}`. |
 | Server-side range checks for `revisesThought`/`branchFromThought` | Both are now validated per call: `isRevision` and `revisesThought` must be sent together (both-or-neither, like `branchFromThought`/`branchId`). |
-| HTTP session ids, 60-minute idle timeout, `GET`/`DELETE /mcp` | Stateless mode: no `Mcp-Session-Id` is issued or read; `GET`/`DELETE` → `405`; a stale `Mcp-Session-Id` header is ignored. Bridge for old clients: `MCPGODEBUG=allowsessionsinstateless=1` (removed in go-sdk v1.9.0). |
+| HTTP session ids, 60-minute idle timeout, `GET`/`DELETE /mcp` | Stateless mode: no `Mcp-Session-Id` is issued or read; `GET`/`DELETE` → `405`; a stale `Mcp-Session-Id` header is ignored. Bridge for old clients: `MCPGODEBUG=allowsessionsinstateless=1` (slated for removal in go-sdk v1.9.0). |
 | CLI accumulation across lines | Each NDJSON line is independent. |
 
 Also in this release:

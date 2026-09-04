@@ -140,7 +140,7 @@ func TestCORSAllowsConfiguredOrigin(t *testing.T) {
 		t.Errorf("Allow-Methods = %q, want POST, OPTIONS", got)
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Authorization") || !strings.Contains(got, "Mcp-Method") || !strings.Contains(got, "Mcp-Name") {
-		t.Errorf("Allow-Headers = %q, must include Authorization for browser OIDC clients", got)
+		t.Errorf("Allow-Headers = %q, must include Authorization (browser OIDC) and Mcp-Method/Mcp-Name (protocol 2026-07-28)", got)
 	}
 	if got := rec.Header().Get("Vary"); got != "Origin" {
 		t.Errorf("Vary = %q, want Origin", got)

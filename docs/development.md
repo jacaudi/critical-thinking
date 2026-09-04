@@ -2,15 +2,15 @@
 
 ## Toolchain
 
-Go 1.26+. No other build dependencies (the MCP SDK is a Go module).
+Go 1.26+ builds the binary on its own (the MCP SDK is a Go module). The verification targets also need [Task](https://taskfile.dev), `jq`, and `shellcheck`; the dev container below has all of them.
 
 ## Build
 
 ```bash
-go build -ldflags "-X main.version=$(git describe --tags --always)" -o critical-thinking ./cmd/critical-thinking
+task build   # bin/critical-thinking, stamped with the git version
 ```
 
-The `-X main.version=...` flag stamps the build with a version string surfaced via `/health` and the MCP `Implementation.Version`.
+`task build` passes `-X main.version=...` (plus commit and date) so the build's version is surfaced via `/health` and the MCP `Implementation.Version`.
 
 ## Test
 

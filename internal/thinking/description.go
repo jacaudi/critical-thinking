@@ -22,8 +22,9 @@ Required fields — ` + requiredFieldsChecklist + `
 Stateless: this tool keeps nothing between calls. It validates and narrates
 the one thought you send; it has never seen your earlier ones.
 Your own context is the record, so open each thought after the first by
-restating what the previous one concluded and what its critique changed, and set confidence by
-comparing it with the confidences you already assigned: if they all sit in
+restating what the previous one concluded and what its critique changed, and
+set confidence by comparing it with the confidences you already assigned: if
+they all sit in
 0.8–0.9, the field is telling you nothing.
 
 Fields:
@@ -61,5 +62,6 @@ Anti-patterns:
 Returns the narrated transcript of this thought plus its routing fields
 (thoughtNumber, totalThoughts, nextThoughtNeeded, confidence) echoed back.
 
-Use this when being wrong is expensive and the problem deserves slow,
-examined, multi-step thinking. Not for trivia or one-step lookups.`
+Use this when being wrong is expensive and the problem deserves examined,
+multi-step thinking. When a host protocol asks for it on every prompt, follow
+the protocol and keep the sequence as short as the question honestly allows.`

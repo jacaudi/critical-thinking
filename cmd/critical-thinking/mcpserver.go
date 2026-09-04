@@ -159,9 +159,9 @@ func otelHTTPHandler(inner http.Handler) http.Handler {
 
 // newMCPServer constructs the *mcp.Server with the criticalthinking tool
 // registered. The tool handler is a pure function, so one server is shared by
-// every session and every request; so ReadOnlyHint and OpenWorldHint below
-// are literally true (IdempotentHint is spec-inert once ReadOnlyHint is set,
-// and DestructiveHint likewise).
+// every session and every request, and the ReadOnlyHint and OpenWorldHint
+// annotations below are accurate (IdempotentHint and DestructiveHint are
+// spec-inert once ReadOnlyHint is set).
 func newMCPServer() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "critical-thinking",

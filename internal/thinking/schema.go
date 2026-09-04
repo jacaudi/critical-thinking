@@ -22,10 +22,10 @@ type ThoughtData struct {
 	ThoughtNumber     int    `json:"thoughtNumber"`
 	TotalThoughts     int    `json:"totalThoughts"`
 	NextThoughtNeeded *bool  `json:"nextThoughtNeeded"`
-	IsRevision        bool   `json:"isRevision,omitempty"`
-	RevisesThought    int    `json:"revisesThought,omitempty"`
-	BranchFromThought int    `json:"branchFromThought,omitempty"`
-	BranchID          string `json:"branchId,omitempty"`
+	IsRevision        bool   `json:"isRevision,omitempty" jsonschema:"This thought corrects an earlier one. Send together with revisesThought, or omit both."`
+	RevisesThought    int    `json:"revisesThought,omitempty" jsonschema:"The thoughtNumber being corrected (≥ 1). Send together with isRevision=true, or omit both."`
+	BranchFromThought int    `json:"branchFromThought,omitempty" jsonschema:"The thoughtNumber this alternative branches from (≥ 1). Send together with branchId, or omit both."`
+	BranchID          string `json:"branchId,omitempty" jsonschema:"Name of the alternative being explored. Send together with branchFromThought, or omit both."`
 
 	Confidence        float64  `json:"confidence"`
 	Assumptions       []string `json:"assumptions"`
