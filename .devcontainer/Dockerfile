@@ -23,7 +23,7 @@ RUN go install "github.com/go-task/task/v3/cmd/task@${TASK_VERSION}" \
 # Architecture-aware: this container is built natively (arm64 on Apple silicon,
 # amd64 on the runner), and every project below publishes both.
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-ARG GOLANGCI_LINT_VERSION=2.13.2
+ARG GOLANGCI_LINT_VERSION=2.14.0
 # renovate: datasource=github-releases depName=rhysd/actionlint
 ARG ACTIONLINT_VERSION=1.7.12
 # renovate: datasource=github-releases depName=hadolint/hadolint
