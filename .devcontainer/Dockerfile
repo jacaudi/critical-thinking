@@ -13,7 +13,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # renovate: datasource=go depName=github.com/go-task/task/v3
-ARG TASK_VERSION=v3.53.1
+ARG TASK_VERSION=v3.54.0
 # renovate: datasource=go depName=golang.org/x/vuln
 ARG GOVULNCHECK_VERSION=v1.7.0
 RUN go install "github.com/go-task/task/v3/cmd/task@${TASK_VERSION}" \
