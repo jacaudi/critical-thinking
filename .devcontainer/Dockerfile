@@ -15,7 +15,7 @@ RUN apt-get update \
 # renovate: datasource=go depName=github.com/go-task/task/v3
 ARG TASK_VERSION=v3.53.1
 # renovate: datasource=go depName=golang.org/x/vuln
-ARG GOVULNCHECK_VERSION=v1.7.0
+ARG GOVULNCHECK_VERSION=v1.9.0
 RUN go install "github.com/go-task/task/v3/cmd/task@${TASK_VERSION}" \
  && go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
 
