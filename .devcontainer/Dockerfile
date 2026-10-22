@@ -3,7 +3,7 @@
 # versions .github/actions/setup/action.yml installs on the runner. Every
 # verification target lives in taskfile.yml so this container and CI run the
 # same commands and the same tool versions.
-FROM golang:1.27-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b
+FROM golang:1.27-bookworm@sha256:972b4110ba0f47539a975c31e52c64765e1ff19f2d74469ae4a595c6676e80a5
 
 # shellcheck and jq: plugin lint. yamllint: repo:yaml. curl/ca-certificates: the
 # pinned tarball installs below. (Versions are apt's; none of these is pinned in
